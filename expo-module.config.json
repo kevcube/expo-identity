@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android", "web"],
+  "apple": {
+    "modules": ["ExpoIdentityModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.identity.ExpoIdentityModule"]
+  }
+}
