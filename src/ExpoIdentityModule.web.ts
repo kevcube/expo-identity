@@ -1,15 +1,18 @@
-import { registerWebModule, NativeModule } from 'expo';
+import { NativeModule, registerWebModule } from "expo";
 
-import { ExpoIdentityModuleEvents } from './ExpoIdentity.types';
+import type {
+	ExpoIdentityModuleEvents,
+	IdentityDocument,
+} from "./ExpoIdentity.types";
 
 class ExpoIdentityModule extends NativeModule<ExpoIdentityModuleEvents> {
-  PI = Math.PI;
-  async setValueAsync(value: string): Promise<void> {
-    this.emit('onChange', { value });
-  }
-  hello() {
-    return 'Hello world! 👋';
-  }
+	PI = Math.PI;
+	async setValueAsync(value: IdentityDocument): Promise<void> {
+		this.emit("onIdentityReceived", value);
+	}
+	hello() {
+		return "Hello world! 👋";
+	}
 }
 
-export default registerWebModule(ExpoIdentityModule, 'ExpoIdentityModule');
+export default registerWebModule(ExpoIdentityModule, "ExpoIdentityModule");
