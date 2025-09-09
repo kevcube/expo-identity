@@ -1,17 +1,25 @@
 export type IdentityDocument = "driversLicense" | "nationalIDCard" | "photoID";
 
-export type CommonElements = "givenName" | "familyName" | "portrait" | "address" | "documentNumber" | "dateOfBirth" | "age" | "sex"
+export type CommonElements =
+	| "givenName"
+	| "familyName"
+	| "portrait"
+	| "address"
+	| "documentNumber"
+	| "dateOfBirth"
+	| "age"
+	| "sex";
 
 export type DriversLicenseRequestableElements =
 	| "issuingAuthority"
 	| "documentExpirationDate"
 	| "documentIssueDate"
-	| "drivingPrivilege"
+	| "drivingPrivilege";
 
 export type PhotoIDRequestableElements =
 	| "issuingAuthority"
 	| "documentIssueDate"
-	| "documentExpirationDate"
+	| "documentExpirationDate";
 
 /**
  * Parameterised age‑check element.
@@ -19,15 +27,17 @@ export type PhotoIDRequestableElements =
  *   { type: "ageAtLeast", threshold: 21 }
  */
 export type AgeAtLeastElement = {
-  type: "ageAtLeast";
-  threshold: number;
+	type: "ageAtLeast";
+	threshold: number;
 };
 
 /**
  * Intent to store identity document data
  */
-export type IntentToStore = { intentToStore: "willNotStore" | "mayStore", days?: number }
-
+export type IntentToStore = {
+	intentToStore: "willNotStore" | "mayStore";
+	days?: number;
+};
 
 /**
  * Compile‑time helper that rejects arrays/tuples containing duplicate items.
@@ -75,20 +85,40 @@ export type UniqueArray<
  */
 export interface IdentityDocumentRequest {
 	driversLicense?: {
-		elements: UniqueArray<(CommonElements | DriversLicenseRequestableElements | AgeAtLeastElement)[]>;
+		elements: UniqueArray<
+			(CommonElements | DriversLicenseRequestableElements | AgeAtLeastElement)[]
+		>;
 		intentToStore: IntentToStore;
-	}
+	};
 	nationalIDCard?: {
 		elements: UniqueArray<(CommonElements | AgeAtLeastElement)[]>;
 		intentToStore: IntentToStore;
-	}
+	};
 	photoID?: {
-		elements: UniqueArray<(CommonElements | PhotoIDRequestableElements | AgeAtLeastElement)[]>;
+		elements: UniqueArray<
+			(CommonElements | PhotoIDRequestableElements | AgeAtLeastElement)[]
+		>;
 		intentToStore: IntentToStore;
-	}
+	};
 }
 
 export type ExpoIdentityModuleEvents = {
 	onIdentityReceived: (data: IdentityDocument) => void;
 	onError: (error: { code: string; message: string }) => void;
+};
+
+// Props for the native Verify with Wallet button view
+export type VerifyIdentityWithWalletButtonProps = {
+	// Document type to probe for requestability and to decide whether to render the button
+	documentKind?: IdentityDocument;
+	label?: "continue" | "verify" | "verifyAge" | "verifyIdentity";
+	buttonStyle?: "black" | "blackOutline";
+	identityRequest?: IdentityDocumentRequest;
+	// Optional compatibility props for web stub
+	url?: string;
+	onLoad?: (event: { nativeEvent: any }) => void;
+	onButtonPress?: (event: { nativeEvent: any }) => void;
+	onAvailabilityChange?: (event: { nativeEvent: { available: boolean } }) => void;
+	onCompletion?: (event: { nativeEvent: { ok: boolean; error?: string } }) => void;
+	style?: any;
 };

@@ -2,10 +2,80 @@ import ExpoModulesCore
 import PassKit
 import UIKit
 
-// MARK: - PassKit Bridging Helpers
-// -----------------------------------------------------------------------------
-// These retroactive `Convertible` conformances let Expo bridge JSON coming from
-// React‑Native to strongly‑typed PassKit enums / classes.
+enum WalletVerifyLabel: String, Enumerable {
+  case verifyIdentity
+  case verify
+  case verifyAge
+  case `continue`
+}
+
+extension WalletVerifyLabel {
+  var appleLabel: VerifyIdentityWithWalletButtonLabel {
+    switch self {
+    case .verifyIdentity: .verifyIdentity
+    case .verify:         .verify
+    case .verifyAge:      .verifyAge
+    case .continue:       .continue
+    }
+  }
+}
+
+@available(iOS 16.0, *)
+public enum ExpoIdentityDocumentKind: String, Convertible {
+  case driversLicense
+  case nationalIDCard
+  case photoID
+
+  public static func convert(from value: Any?, appContext _: AppContext) throws -> Self {
+    guard let str = value as? String, let kind = Self(rawValue: str) else {
+      throw Conversions.ConvertingException<Self>(value)
+    }
+    return kind
+  }
+
+  /// Returns the appropriate PassKit descriptor for this kind, or `nil` if
+  /// the current OS version does not support it.
+  var descriptor: PKIdentityDocumentDescriptor? {
+    switch self {
+    case .driversLicense:
+      return PKIdentityDriversLicenseDescriptor()
+    case .nationalIDCard:
+      if #available(iOS 18.0, *) { return PKIdentityNationalIDCardDescriptor() }
+      return nil
+    case .photoID:
+      if #available(iOS 26.0, *) { return PKIdentityPhotoIDDescriptor() }
+      return nil
+    }
+  }
+}
+
+@available(iOS 16.0, *)
+public enum ExpoVerifyIdentityWithWalletButtonLabel: String, Convertible {
+  case `continue` = "continue"
+  case verify = "verify"
+  case verifyAge = "verifyAge"
+  case verifyIdentity = "verifyIdentity"
+
+  public static func convert(from value: Any?, appContext _: AppContext) throws -> Self {
+    guard let str = value as? String, let label = Self(rawValue: str) else {
+      throw Conversions.ConvertingException<Self>(value)
+    }
+    return label
+  }
+}
+
+@available(iOS 16.0, *)
+public enum ExpoVerifyIdentityWithWalletButtonStyle: String, Convertible {
+  case black = "black"
+  case blackOutline = "blackOutline"
+
+  public static func convert(from value: Any?, appContext _: AppContext) throws -> Self {
+    guard let str = value as? String, let style = Self(rawValue: str) else {
+      throw Conversions.ConvertingException<Self>(value)
+    }
+    return style
+  }
+}
 
 @available(iOS 16.0, *)
 extension PKIdentityIntentToStore: @retroactive Convertible {
@@ -23,9 +93,9 @@ extension PKIdentityIntentToStore: @retroactive Convertible {
 
     case "mayStore":
       if let days = dict["days"] as? Int {
-    
+
     return Self.mayStore(days: days)     // parameterised variant
-        
+
       }
       return Self.mayStore as! Self
 
@@ -37,8 +107,8 @@ extension PKIdentityIntentToStore: @retroactive Convertible {
 
 // Common identity elements.
 @available(iOS 16.0, *)
-public extension PKIdentityElement {
-  static func convert(from value: Any?, appContext _: AppContext) throws -> Self {
+extension PKIdentityElement: @retroactive Convertible {
+  public static func convert(from value: Any?, appContext _: AppContext) throws -> Self {
     guard let str = value as? String else {
       throw Conversions.ConvertingException<Self>(value)
     }
@@ -66,6 +136,23 @@ public extension PKIdentityElement {
   }
 }
 
+// Centralized support probe that abstracts iOS API differences.
+@available(iOS 16.0, *)
+enum PKIdentitySupportChecker {
+  static func canRequest(_ descriptor: PKIdentityDocumentDescriptor) async -> Bool {
+    if #available(iOS 26.0, *) {
+      return await withCheckedContinuation { continuation in
+        let controller: PKIdentityAuthorizationController = PKIdentityAuthorizationController()
+        controller.checkCanRequestDocument(descriptor) { can in
+          continuation.resume(returning: can)
+        }
+      }
+    } else {
+      return await PKIdentityAuthorizationController().canRequestDocument(descriptor)
+    }
+  }
+}
+
 // MARK: - Expo Module
 // -----------------------------------------------------------------------------
 @available(iOS 16.0, *)
@@ -75,14 +162,53 @@ public class ExpoIdentityModule: Module {
   public func definition() -> ModuleDefinition {
     Name("ExpoIdentity")
 
-    // Simple capability probe -------------------------------------------------
-    AsyncFunction("canRequestIdentityDocument") { (documentKind: String, promise: Promise) in
-      Task {
-        guard let descriptor = ExpoIdentityModule.makeDescriptor(for: documentKind) else {
-          promise.resolve(false)
-          return
+    // Expose a native view so apps can render the standard
+    // "Verify with Wallet" button provided by Apple.
+    View(VerifyWithWalletButtonView.self) {
+      Events("onLoad", "onButtonPress", "onAvailabilityChange", "onCompletion")
+      Prop("documentKind") { (view: VerifyWithWalletButtonView, kind: ExpoIdentityDocumentKind?) in
+        view.documentKind = kind ?? .nationalIDCard
+      }
+      Prop("label") { (view: VerifyWithWalletButtonView, label: ExpoVerifyIdentityWithWalletButtonLabel) in
+        switch label {
+        case .continue:
+          view.label = .continue
+        case .verify:
+          view.label = .verify
+        case .verifyAge:
+          view.label = .verifyAge
+        case .verifyIdentity:
+          view.label = .verifyIdentity
         }
-        let ok = await PKIdentityAuthorizationController().canRequestDocument(descriptor)
+      }
+      Prop("buttonStyle") { (view: VerifyWithWalletButtonView, style: ExpoVerifyIdentityWithWalletButtonStyle) in
+        switch style {
+        case .black:
+          view.style = .black
+        case .blackOutline:
+          view.style = .blackOutline
+        }
+      }
+      Prop("identityRequest") { (view: VerifyWithWalletButtonView, jsDict: [String: Any]?) in
+        guard let jsDict = jsDict else { return }
+        do {
+          if let req = try ExpoIdentityModule.buildPKRequest(from: jsDict) {
+            view.identityRequest = req
+          }
+        } catch {
+          // Ignore build errors, fall back to simple press
+        }
+      }
+    }
+
+    // Simple capability probe -------------------------------------------------
+    AsyncFunction("canRequestIdentityDocument") { (documentKind: ExpoIdentityDocumentKind, promise: Promise) in
+      guard let descriptor = documentKind.descriptor else {
+        promise.resolve(false)
+        return
+      }
+      Task {
+        let ok = await PKIdentitySupportChecker.canRequest(descriptor)
         promise.resolve(ok)
       }
     }
@@ -127,7 +253,8 @@ public class ExpoIdentityModule: Module {
             let elementItems = spec["elements"] as? [Any] else { continue }
 
       // 1. Descriptor per document type
-      guard let descriptor = makeDescriptor(for: docKey) else { continue }
+      guard let kind = try? ExpoIdentityDocumentKind.convert(from: docKey, appContext: .init()),
+            let descriptor = kind.descriptor else { continue }
 
       // 2. Per‑document intent (defaults to willNotStore)
       var intent: PKIdentityIntentToStore = .willNotStore
@@ -173,24 +300,5 @@ public class ExpoIdentityModule: Module {
       }
     }
     return request
-  }
-
-  /// Map "driversLicense" | "nationalIDCard" | "photoID" -> concrete descriptor
-  private static func makeDescriptor(for key: String) -> PKIdentityDocumentDescriptor? {
-    switch key {
-    case "driversLicense":
-      return PKIdentityDriversLicenseDescriptor()
-
-    case "nationalIDCard":
-      if #available(iOS 18.0, *) { return PKIdentityNationalIDCardDescriptor() }
-      return nil
-
-    case "photoID":
-      if #available(iOS 26.0, *) { return PKIdentityPhotoIDDescriptor() }
-      return nil
-
-    default:
-      return nil
-    }
   }
 }

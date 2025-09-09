@@ -1,9 +1,6 @@
 {
-  "platforms": ["apple", "android", "web"],
-  "apple": {
+  "platforms": ["ios"],
+  "ios": {
     "modules": ["ExpoIdentityModule"]
-  },
-  "android": {
-    "modules": ["expo.modules.identity.ExpoIdentityModule"]
   }
 }

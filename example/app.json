@@ -15,8 +15,31 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "expo.modules.identity.example",
+      "infoPlist": {
+        "NSIdentityUsageDescription": "Verify your identity to share only the requested information."
+      },
       "entitlements": {
-        "com.apple.developer.in-app-identity-presentment": true
+        "com.apple.developer.in-app-identity-presentment": {
+          "document-types": [
+            "us-drivers-license"
+          ],
+          "elements": [
+            "given-name",
+            "family-name",
+            "portrait",
+            "address",
+            "issuing-authority",
+            "document-expiration-date",
+            "document-number",
+            "driving-privileges",
+            "age",
+            "date-of-birth"
+          ]
+        },
+        "com.apple.developer.in-app-identity-presentment.merchant-identifiers": [
+          "none"
+        ],
+        "com.apple.developer.passkit.identity": true
       }
     },
     "android": {

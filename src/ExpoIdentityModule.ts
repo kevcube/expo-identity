@@ -1,16 +1,15 @@
 import { NativeModule, requireNativeModule } from "expo";
 
 import type {
-	ExpoIdentityModuleEvents,
+  ExpoIdentityModuleEvents,
+  IdentityDocumentRequest,
+  IdentityDocument,
 } from "./ExpoIdentity.types";
 
-declare class ExpoIdentityModule extends NativeModule<ExpoIdentityModuleEvents> {
-	canRequestIdentityDocument(documentKind: string): Promise<boolean>;
-	requestIdentityDocument(
-		documentRequest: Record<string, string[]>,
-		intentToStore: { type: string; days?: number },
-	): Promise<boolean>;
+declare class ExpoIdentityNativeModule extends NativeModule<ExpoIdentityModuleEvents> {
+  canRequestIdentityDocument(documentKind: IdentityDocument): Promise<boolean>;
+  requestIdentityDocument(documentRequest: IdentityDocumentRequest): Promise<boolean>;
 }
 
 // This call loads the native module object from the JSI.
-export default requireNativeModule<ExpoIdentityModule>("ExpoIdentity");
+export default requireNativeModule<ExpoIdentityNativeModule>("ExpoIdentity");
