@@ -1,0 +1,57 @@
+Copyright © 2022 Apple Inc.
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+------------------------
+
+This archive contains sample data for testing the PassKit identity verification API response.
+
+API responses (accessed through the "encryptedData" property on PKIdentityDocument) consist of:
+* A CBOR-encoded encryption envelope containing encryption metadata and an HPKE-encrypted data blob
+* After decryption, the decrypted data is a CBOR-encoded dictionary. Under the "identity" key in the dictionary is an ISO 18013-5 mdoc response. The mdoc response contains the raw data elements, plus issuer and device signatures. 
+
+Consult the documentation at https://developer.apple.com/contact/request/verify-with-wallet/ for more information. 
+
+The archive contains test data for use with the iOS simulator, as well as a complete sample response.
+
+Values that are normally raw binary data are hex encoded in these samples. They must be hex decoded before they can be used.
+
+== Simulator (/simulator) ==
+
+Within the iOS Simulator, the API returns a response with test data. The response is encrypted to the certificate in `merchant_encryption.crt` with private key `merchant_encryption.key`, instead of the certificate configured for your mechant ID in your developer account.
+
+The parameters for the session transcript of the simulator response are available in `session_transcript_parameters.txt`. 
+
+The response in the simulator contains zeroes for the issuer and device signatures, and does not include an issuer certificate. 
+
+== Response Sample (/sample) == 
+
+The sample subdirectory contains a full sample response. The response data is encrypted to a test merchant certificate, and contains valid device and issuer signatures from a test issuer. Use this sample to test your implementation for decrypting and verifying a response.
+
+To decrypt the response data, follow these steps:
+1. Start with the CBOR-encoded encryption envelope in `hpke_envelope.cbor`. This is the data obtained from the encryptedData property on the PKIdentityDocument your app receives.
+2. Build the session transcript using the parameters from `session_transcript_parameters.txt`. This produces `session_transcript.txt`.
+    * In the real flow, team ID and merchant ID are configured through your Developer account, and the nonce passed into PKIdentityRequest. These values are not included in the response data and must be known to the decrypting server out-of-band.
+    * Encryption key hash is the SHA256 hash of the uncompressed public key of the server’s decryption certificate, as configured in your Developer account. This same value is also in the pkRHash property in the HPKE envelope’s params structure. In the sample, the public key is `merchant_encryption_public_key.pem` and the uncompressed representation of the public key is `merchant_encryption_uncompressed_public_key.txt`. 
+3. Compute the SHA256 hash of the session transcript. This produces `info_hash.txt.` Ensure that this property matches the infoHash param of the HPKE envelope’s params structure.
+4. Decrypt the HPKE envelope’s data param using HPKE.
+    * The private key is in `merchant_encryption.key`
+    * The info param is the session transcript previously constructed (not the hash).
+    * The “enc” param is the pkEm param in the HPKE envelope (`pkem.txt`)
+    * The HPKE options chosen are always KEM = P256, KDF = HKDF-SHA256, AEAD = AES-128-GCM
+5. The result of decryption will be `plaintext_topics.cbor`
+
+Once the data is decrypted, you should validate it by checking both the issuer and device signatures. Consult the ISO 18013-5 specification for the full details of how to perform these checks.
+
+To validate the decrypted data, follow these steps:
+1. The decrypted data is a CBOR-encoded dictionary. The value under the “identity” key will be a device retrieval mdoc response, as described in ISO 18013-5 (section 8.3.2.1.2.2). 
+2. Validate the issuer data authentication as described in ISO 18013-5 section 9.1.2. 
+    * The issuer certificate used to sign the MSO is `issuer_signing.crt` which itself is signed by the CA certificate `issuer_root.crt`
+    * The intermediate values used to verify the issuer signature are shown in `issuer_signature_validation.txt`
+3. Validate the device signature, as described in ISO 18013-5 section 9.1.3.
+    * Only mdoc ECDSA authentication is used. mdoc MAC authentication is not used. 
+    * The session transcript used to construct the DeviceAuthentication structure is the same session transcript used for decryption (`session_transcript.txt`)
+    * The COSEKey representation of the device signing key is obtained from the MSO used during issuer data authentication (`device_public_key.hex`). 
+    * The intermediate values used to verify the device signature are shown in `device_signature_validation.txt`.
+4. You can now use the element values from the response ("IssuerSignedItem")

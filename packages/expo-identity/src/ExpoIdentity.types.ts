@@ -1,5 +1,8 @@
-export type IdentityDocument = "driversLicense" | "nationalIDCard" | "photoID";
+export type IdentityDocument = "driversLicense" | "nationalIDCard" | "photoID" | "anyOf";
 
+// export type IdentityElement
+
+// Common elements available across all document types
 export type CommonElements =
 	| "givenName"
 	| "familyName"
@@ -10,16 +13,36 @@ export type CommonElements =
 	| "age"
 	| "sex";
 
+// Driver's license specific elements
 export type DriversLicenseRequestableElements =
 	| "issuingAuthority"
 	| "documentExpirationDate"
 	| "documentIssueDate"
 	| "drivingPrivilege";
 
+// Photo ID specificypes elements
 export type PhotoIDRequestableElements =
 	| "issuingAuthority"
 	| "documentIssueDate"
 	| "documentExpirationDate";
+
+export type VerifyIdentityWithWalletButtonLabel =
+	| "continue"
+	| "verify"
+	| "verifyAge"
+	| "verifyIdentity";
+
+export type VerifyIdentityWithWalletButtonStyle = "black" | "blackOutline";
+
+// Allow any string to support future elements or custom implementations
+export type FlexibleIdentityElement = string;
+
+// Union of all known elements plus flexible string support
+export type IdentityElement =
+	| CommonElements
+	| DriversLicenseRequestableElements
+	| PhotoIDRequestableElements
+	| FlexibleIdentityElement;
 
 /**
  * Parameterised age‑check element.
@@ -38,6 +61,7 @@ export type IntentToStore = {
 	intentToStore: "willNotStore" | "mayStore";
 	days?: number;
 };
+
 
 /**
  * Compile‑time helper that rejects arrays/tuples containing duplicate items.
@@ -84,19 +108,32 @@ export type UniqueArray<
  * ```
  */
 export interface IdentityDocumentRequest {
+  /**
+   * Apple Pay merchant identifier required for Verify Identity with Wallet.
+   * Example: "merchant.com.example". This must match an Apple Pay Merchant ID
+   * that your app is entitled to use in the Apple Developer portal/Xcode.
+   */
+  merchantIdentifier?: string;
+  /**
+   * Optional nonce that will be embedded into the PKIdentityRequest. When provided,
+   * it must be a base64-encoded byte string that the backend can include in the
+   * session transcript to derive the decryption keys.
+   */
+  nonce?: string;
+  // Additional fields may be added in future versions as APIs evolve.
 	driversLicense?: {
 		elements: UniqueArray<
-			(CommonElements | DriversLicenseRequestableElements | AgeAtLeastElement)[]
+			(IdentityElement | AgeAtLeastElement)[]
 		>;
 		intentToStore: IntentToStore;
 	};
 	nationalIDCard?: {
-		elements: UniqueArray<(CommonElements | AgeAtLeastElement)[]>;
+		elements: UniqueArray<(IdentityElement | AgeAtLeastElement)[]>;
 		intentToStore: IntentToStore;
 	};
 	photoID?: {
 		elements: UniqueArray<
-			(CommonElements | PhotoIDRequestableElements | AgeAtLeastElement)[]
+			(IdentityElement | AgeAtLeastElement)[]
 		>;
 		intentToStore: IntentToStore;
 	};
@@ -118,7 +155,16 @@ export type VerifyIdentityWithWalletButtonProps = {
 	url?: string;
 	onLoad?: (event: { nativeEvent: any }) => void;
 	onButtonPress?: (event: { nativeEvent: any }) => void;
+	onPress?: (event: { nativeEvent: any }) => void; // Alias for onButtonPress
 	onAvailabilityChange?: (event: { nativeEvent: { available: boolean } }) => void;
-	onCompletion?: (event: { nativeEvent: { ok: boolean; error?: string } }) => void;
+	onCompletion?: (event: {
+		nativeEvent: {
+			ok: boolean;
+			error?: string;
+			code?: number;
+			encryptedData?: string;
+		};
+	}) => void;
 	style?: any;
+	children?: React.ReactNode; // Fallback if unavailable
 };

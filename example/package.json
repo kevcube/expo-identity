@@ -1,7 +1,7 @@
 {
   "name": "expo-identity-example",
   "version": "1.0.0",
-  "main": "expo/AppEntry.js",
+  "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
@@ -9,13 +9,13 @@
     "web": "expo start --web"
   },
   "dependencies": {
-    "@expo/ui": "~0.2.0-alpha.9",
-    "expo": "^54.0.0-preview.15",
+    "@expo/ui": "~0.2.0-beta.0",
+    "expo": "~54.0.10",
     "expo-build-properties": "~1.0.7",
-    "expo-dev-client": "~6.0.10",
-    "expo-identity": "file:..",
+    "expo-dev-client": "~6.0.11",
+    "expo-router": "~6.0.8",
     "react": "19.1.0",
-    "react-native": "0.81.1",
+    "react-native": "0.81.4",
     "react-native-safe-area-context": "~5.6.0"
   },
   "devDependencies": {

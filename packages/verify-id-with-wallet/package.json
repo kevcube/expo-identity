@@ -1,0 +1,15 @@
+{
+  "name": "verify-id-with-wallet",
+  "module": "index.ts",
+  "type": "module",
+  "private": false,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@hpke/core": "^1.7.4"
+  }
+}
