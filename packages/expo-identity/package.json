@@ -8,7 +8,7 @@
     "build": "expo-module build",
     "clean": "expo-module clean",
     "lint": "expo-module lint",
-    "test": "expo-module test",
+    "test": "tsx --test src/__tests__/*.test.ts",
     "prepare": "expo-module prepare",
     "prepublishOnly": "expo-module prepublishOnly",
     "expo-module": "expo-module",
@@ -42,7 +42,8 @@
     "@types/react": "~19.2.0",
     "expo": "~56.0.15",
     "expo-module-scripts": "^56.0.3",
-    "react-native": "0.85.0"
+    "react-native": "0.85.0",
+    "tsx": "^4.23.1"
   },
   "peerDependencies": {
     "expo": "*",
@@ -50,6 +51,15 @@
     "react-native": "*"
   },
   "dependencies": {
+    "@hpke/core": "^1.9.0",
+    "@noble/curves": "^2.2.0",
+    "@noble/hashes": "^2.2.0",
+    "@owf/cose": "^0.3.2",
+    "@owf/mdoc": "^0.7.0",
+    "@peculiar/x509": "^2.0.0",
+    "cbor2": "^2.3.0",
+    "jose": "^6.2.3",
+    "reflect-metadata": "^0.2.2",
     "verify-id-with-wallet": "file:../verify-id-with-wallet"
   }
 }
