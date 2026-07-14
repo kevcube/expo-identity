@@ -4,25 +4,25 @@ const path = require('path');
 
 const config = getDefaultConfig(__dirname);
 
-// npm v7+ will install ../node_modules/react and ../node_modules/react-native because of peerDependencies.
-// To prevent the incompatible react-native between ./node_modules/react-native and ../node_modules/react-native,
-// excludes the one from the parent folder when bundling.
-config.resolver.blockList = [
-  ...Array.from(config.resolver.blockList ?? []),
-  new RegExp(path.resolve('..', 'node_modules', 'react')),
-  new RegExp(path.resolve('..', 'node_modules', 'react-native')),
-];
+config.projectRoot = __dirname;
 
-config.resolver.nodeModulesPaths = [
-  path.resolve(__dirname, './node_modules'),
-  path.resolve(__dirname, '../node_modules'),
-];
+const projectModules = path.resolve(__dirname, './node_modules');
+const workspaceModules = path.resolve(__dirname, './node_modules');
+
+config.resolver.nodeModulesPaths = [projectModules, workspaceModules];
 
 config.resolver.extraNodeModules = {
-  'expo-identity': '..',
+  'expo-identity': path.resolve(__dirname, '../packages/expo-identity'),
+  expo: path.join(workspaceModules, 'expo'),
+  'expo-router': path.join(workspaceModules, 'expo-router'),
+  react: path.join(workspaceModules, 'react'),
+  'react-native': path.join(workspaceModules, 'react-native'),
 };
 
-config.watchFolders = [path.resolve(__dirname, '..')];
+config.watchFolders = [
+  path.resolve(__dirname, '..'),
+  path.resolve(__dirname, '../packages'),
+];
 
 config.transformer.getTransformOptions = async () => ({
   transform: {

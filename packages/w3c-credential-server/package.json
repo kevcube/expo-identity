@@ -1,0 +1,27 @@
+{
+  "name": "w3c-credential-server",
+  "version": "0.1.0",
+  "description": "Server utilities for verifying and decrypting W3C credential responses",
+  "type": "module",
+  "module": "src/index.ts",
+  "types": "src/index.ts",
+  "sideEffects": false,
+  "keywords": [
+    "w3c",
+    "credentials",
+    "server",
+    "crypto"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/kevcube/expo-identity",
+  "repository": "https://github.com/kevcube/expo-identity",
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "w3c-credential-browser",
+  "version": "0.1.0",
+  "description": "Browser helpers for requesting W3C verifiable credentials via navigator.credentials",
+  "type": "module",
+  "module": "src/index.ts",
+  "types": "src/index.ts",
+  "sideEffects": false,
+  "keywords": [
+    "w3c",
+    "credentials",
+    "navigator",
+    "authentication"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/kevcube/expo-identity",
+  "repository": "https://github.com/kevcube/expo-identity",
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}

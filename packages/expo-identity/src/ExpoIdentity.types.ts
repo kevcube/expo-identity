@@ -26,13 +26,23 @@ export type PhotoIDRequestableElements =
 	| "documentIssueDate"
 	| "documentExpirationDate";
 
-export type VerifyIdentityWithWalletButtonLabel =
-	| "continue"
-	| "verify"
-	| "verifyAge"
-	| "verifyIdentity";
+export enum VerifyIdentityWithWalletButtonLabelEnum {
+	Continue = "continue",
+	Verify = "verify",
+	VerifyAge = "verifyAge",
+	VerifyIdentity = "verifyIdentity",
+}
 
-export type VerifyIdentityWithWalletButtonStyle = "black" | "blackOutline";
+export type VerifyIdentityWithWalletButtonLabel =
+	(typeof VerifyIdentityWithWalletButtonLabelEnum)[keyof typeof VerifyIdentityWithWalletButtonLabelEnum];
+
+export enum VerifyIdentityWithWalletButtonStyleEnum {
+	Black = "black",
+	BlackOutline = "blackOutline",
+}
+
+export type VerifyIdentityWithWalletButtonStyle =
+	(typeof VerifyIdentityWithWalletButtonStyleEnum)[keyof typeof VerifyIdentityWithWalletButtonStyleEnum];
 
 // Allow any string to support future elements or custom implementations
 export type FlexibleIdentityElement = string;

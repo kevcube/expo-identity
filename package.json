@@ -1,8 +1,6 @@
 {
   "private": true,
-  "devDependencies": {
-    "@types/bun": "latest"
-  },
+  "packageManager": "npm@11.17.0",
   "peerDependencies": {
     "typescript": "^5"
   },

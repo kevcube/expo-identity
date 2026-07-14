@@ -9,6 +9,7 @@ public enum ExpoIdentityDocumentKind: String, Enumerable {
   case nationalIDCard
   case photoID
 
+  @available(iOS 16.0, *)
   var descriptor: PKIdentityDocumentDescriptor? {
     switch self {
     case .driversLicense:
@@ -16,15 +17,13 @@ public enum ExpoIdentityDocumentKind: String, Enumerable {
     case .nationalIDCard:
       if #available(iOS 18.0, *) {
         return PKIdentityNationalIDCardDescriptor()
-      } else {
-        return nil
       }
+      return nil
     case .photoID:
       if #available(iOS 26.0, *) {
         return PKIdentityPhotoIDDescriptor()
-      } else {
-        return nil
       }
+      return nil
     }
   }
 }
@@ -68,35 +67,42 @@ public class ExpoIdentityModule: Module {
     Name("ExpoIdentity")
 
     View(ExpoIdentityView.self) {
-      Events("onLoad", "onButtonPress", "onAvailabilityChange", "onCompletion")
-
-      Prop("documentKind") { (view: ExpoIdentityView, kind: ExpoIdentityDocumentKind?) in
-        view.documentKind = kind ?? .driversLicense
-      }
+      Events("onLoad", "onButtonPress", "onCompletion")
 
       Prop("label") { (view: ExpoIdentityView, label: ExpoVerifyIdentityWithWalletButtonLabel) in
-        view.label = label
+        view.labelRawValue = label.rawValue
+        view.updateButtonIfNeeded()
       }
 
       Prop("buttonStyle") { (view: ExpoIdentityView, style: ExpoVerifyIdentityWithWalletButtonStyle) in
-        view.buttonStyle = style
+        view.buttonStyleRawValue = style.rawValue
+        view.updateButtonIfNeeded()
+      }
+
+      Prop("hide") { (view: ExpoIdentityView, hidden: Bool) in
+        view.isHidden = hidden
       }
 
       Prop("identityRequest") { (view: ExpoIdentityView, jsDict: [String: Any]?) in
-        guard let jsDict = jsDict else { return }
+        guard let jsDict = jsDict else {
+          view.clearIdentityRequest()
+          return
+        }
         if #available(iOS 18.0, *) {
           do {
-            if let req = try ExpoIdentityModule.buildPKRequest(from: jsDict) {
+            if let request = try ExpoIdentityModule.buildPKRequest(from: jsDict) {
               if let merchant = jsDict["merchantIdentifier"] as? String, !merchant.isEmpty {
-                req.merchantIdentifier = merchant
+                request.merchantIdentifier = merchant
               }
-              view.pkRequestOpaque = req
+              view.setIdentityRequest(request)
+            } else {
+              view.clearIdentityRequest()
             }
           } catch {
-            // Ignore, fallback to simple press
+            view.clearIdentityRequest()
           }
         } else {
-          view.pkRequestOpaque = nil
+          view.clearIdentityRequest()
         }
       }
 
@@ -105,7 +111,7 @@ public class ExpoIdentityModule: Module {
 
     AsyncFunction("canRequestIdentityDocument") { (kindString: String, promise: Promise) in
       let kind = ExpoIdentityDocumentKind(rawValue: kindString) ?? .driversLicense
-      guard let descriptor = kind.descriptor else {
+      guard #available(iOS 16.0, *), let descriptor = kind.descriptor else {
         promise.resolve(false)
         return
       }
@@ -131,7 +137,6 @@ public class ExpoIdentityModule: Module {
           if let merchant = jsRequest["merchantIdentifier"] as? String, !merchant.isEmpty {
             pkRequest.merchantIdentifier = merchant
           }
-          // No extra validation; let PassKit validate
 
           DispatchQueue.main.async {
             let hostingVC = UIHostingController(rootView: VerifyIdentityWithWalletButton(.verifyIdentity, request: pkRequest) { result in
@@ -162,7 +167,7 @@ public class ExpoIdentityModule: Module {
     }
   }
 
-  @available(iOS 18.0, *)
+  @available(iOS 16.0, *)
   private static func buildPKRequest(from js: [String: Any]) throws -> PKIdentityRequest? {
     var descriptors: [PKIdentityDocumentDescriptor] = []
 
@@ -185,7 +190,9 @@ public class ExpoIdentityModule: Module {
       if kindString == "driversLicense" {
         descriptor = PKIdentityDriversLicenseDescriptor()
       } else if kindString == "nationalIDCard" {
-        descriptor = PKIdentityNationalIDCardDescriptor()
+        if #available(iOS 18.0, *) {
+          descriptor = PKIdentityNationalIDCardDescriptor()
+        }
       } else if kindString == "photoID" {
         if #available(iOS 26.0, *) {
           descriptor = PKIdentityPhotoIDDescriptor()
