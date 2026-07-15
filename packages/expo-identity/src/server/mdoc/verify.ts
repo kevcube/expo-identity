@@ -203,7 +203,10 @@ export async function verifyMdocDeviceResponse<
       cause: error,
     });
   }
-  if (!equalBytes(response.encode(), input.deviceResponse)) {
+  if (
+    input.assurance === "verified" &&
+    !equalBytes(response.encode(), input.deviceResponse)
+  ) {
     throw new TypeError("Credential uses noncanonical or malformed CBOR");
   }
   if (response.status !== 0) {

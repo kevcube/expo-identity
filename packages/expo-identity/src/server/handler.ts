@@ -11,8 +11,12 @@ import {
   createAppleProtocolRequest,
   decryptAppleCredential,
 } from "./apple/protocol";
+import { decryptSignedAppleSample } from "./apple/signed-sample";
 import type { InitializedServerCrypto } from "./crypto/initialize";
-import { randomBase64url } from "./crypto/wintercg-context";
+import {
+  base64urlToBytes,
+  randomBase64url,
+} from "./crypto/wintercg-context";
 import {
   createIsoMdocProtocolRequest,
   decryptIsoMdocCredential,
@@ -444,14 +448,24 @@ async function completeTransaction(input: {
       if (!input.crypto.apple) {
         throw new TypeError("Apple verification credentials are unavailable");
       }
-      decrypted = await decryptAppleCredential({
-        encryptedData: requiredCredentialString(
-          credential.data,
-          "encryptedData",
-        ),
-        nonce: transaction.nonce,
-        credential: input.crypto.apple,
-      });
+      const encryptedData = requiredCredentialString(
+        credential.data,
+        "encryptedData",
+      );
+      decrypted =
+        input.crypto.apple.mode === "simulator"
+          ? await decryptSignedAppleSample({
+              encryptedData,
+              nonce: base64urlToBytes(transaction.nonce),
+              merchantIdentifier: input.crypto.apple.merchantIdentifier,
+              teamIdentifier: input.crypto.apple.teamIdentifier,
+              credential: input.crypto.apple,
+            })
+          : await decryptAppleCredential({
+              encryptedData,
+              nonce: transaction.nonce,
+              credential: input.crypto.apple,
+            });
     } else if (
       transaction.protocol === "openid4vp-v1-signed" ||
       transaction.protocol === "openid4vp-v1-unsigned"

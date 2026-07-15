@@ -2,6 +2,7 @@ import {
   createMemoryTransactionStore,
   defineIdentityRequests,
   expoIdentity,
+  type IdentityTransactionStore,
 } from 'expo-identity/server';
 
 export const requests = defineIdentityRequests({
@@ -21,10 +22,20 @@ export const requests = defineIdentityRequests({
   },
 });
 
+type ExampleServerGlobal = typeof globalThis & {
+  __expoIdentityExampleTransactionStore?: IdentityTransactionStore;
+};
+
+const exampleServerGlobal = globalThis as ExampleServerGlobal;
+const transactionStore =
+  exampleServerGlobal.__expoIdentityExampleTransactionStore ??
+  (exampleServerGlobal.__expoIdentityExampleTransactionStore =
+    createMemoryTransactionStore());
+
 export const identity = expoIdentity({
   requests,
   apple: { mode: 'simulator' },
-  transactionStore: createMemoryTransactionStore(),
+  transactionStore,
   onVerified({ identity: verified }) {
     return {
       request: verified.request,

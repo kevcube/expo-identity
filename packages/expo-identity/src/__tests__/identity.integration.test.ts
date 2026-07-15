@@ -5,12 +5,14 @@ import { describe, it } from "node:test";
 
 import { decryptSignedAppleSample } from "../server/apple/signed-sample";
 import { initializeServerCrypto } from "../server/crypto/initialize";
+import { expoIdentity } from "../server/index";
 import {
   bytesToBase64url,
   parseCertificate,
 } from "../server/crypto/wintercg-context";
 import { verifyMdocDeviceResponse } from "../server/mdoc/verify";
 import { createMemoryTransactionStore } from "../server/transaction-store";
+import type { IdentityTransaction } from "../server/types";
 import { defineIdentityRequests } from "../shared/requests";
 
 const fixtureDirectory = join(
@@ -148,5 +150,74 @@ describe("signed Apple mdoc integration", () => {
         now: verificationTime,
       }),
     );
+  });
+
+  it("completes signed simulator responses through the server handler", async () => {
+    const params = sessionParameters();
+    const merchantIdentifier = params["Merchant ID"];
+    const nonceHex = params.Nonce;
+    if (!merchantIdentifier || !nonceHex) {
+      throw new Error("Apple sample session parameters are incomplete");
+    }
+    const nonce = bytesToBase64url(
+      new Uint8Array(Buffer.from(nonceHex, "hex")),
+    );
+    const transactionStore = createMemoryTransactionStore();
+    const server = expoIdentity({
+      requests,
+      transactionStore,
+      apple: { mode: "simulator" },
+    });
+    await server.ready();
+    const transaction: IdentityTransaction = {
+      id: "signed-simulator-sample",
+      requestKey: "signedSample",
+      request: requests.signedSample,
+      platform: "ios",
+      protocol: "apple-wallet",
+      nonce,
+      expiresAt: Date.now() + 60_000,
+      protocolRequest: {
+        protocol: "apple-wallet",
+        data: {
+          merchantIdentifier,
+          nonce,
+          document: {
+            kind: "driversLicense",
+            elements: [{ alias: "age", element: "age", retain: false }],
+          },
+        },
+      },
+      privateData: {},
+    };
+    await transactionStore.set(transaction);
+
+    const response = await server.handler(
+      new Request("https://example.com/api/identity/complete", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          transactionId: transaction.id,
+          credential: {
+            protocol: "apple-wallet",
+            data: {
+              encryptedData: bytesToBase64url(
+                hexFixture("hpke_envelope.cbor"),
+              ),
+            },
+          },
+        }),
+      }),
+    );
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), {
+      request: "signedSample",
+      assurance: "simulator",
+      document: {
+        doctype: "org.iso.18013.5.1.mDL",
+        claims: { age: 42 },
+      },
+    });
   });
 });
