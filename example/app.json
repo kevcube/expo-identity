@@ -44,6 +44,7 @@
           "ios": {
             "usageDescription": "This app uses identity verification to demonstrate secure age verification with an identity document in Apple Wallet.",
             "merchantIdentifiers": [
+              "PassKit_Identity_Test_Merchant_ID",
               "merchant.dog.icecube.identitytest"
             ],
             "documentTypes": [
