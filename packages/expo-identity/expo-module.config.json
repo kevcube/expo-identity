@@ -4,6 +4,6 @@
     "modules": ["ExpoIdentityModule"]
   },
   "android": {
-    "modules": []
+    "modules": ["expo.modules.identity.ExpoIdentityModule"]
   }
 }

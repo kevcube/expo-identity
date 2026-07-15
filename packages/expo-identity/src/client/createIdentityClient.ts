@@ -1,7 +1,9 @@
-import type {
-  IdentityRequestDefinition,
-  IdentityRequestDefinitions,
-} from '../shared/requests';
+import defaultHandler from "./default-handler";
+import {
+  isIdentityErrorCode,
+  normalizeIdentityError,
+  type IdentityClientError,
+} from "./errors";
 import {
   isRecord,
   parseProtocolRequest,
@@ -9,13 +11,11 @@ import {
   type IdentityHandler,
   type ProtocolCredential,
   type ProtocolRequest,
-} from '../shared/protocol';
-import defaultHandler from './default-handler';
-import {
-  isIdentityErrorCode,
-  normalizeIdentityError,
-  type IdentityClientError,
-} from './errors';
+} from "../shared/protocol";
+import type {
+  IdentityRequestDefinition,
+  IdentityRequestDefinitions,
+} from "../shared/requests";
 
 export type IdentityServerTypeContract = {
   readonly $types: {
@@ -41,7 +41,10 @@ export type RequestDefinition<
     : never
   : never;
 
-export type Output<TServer, TKey extends RequestKey<TServer>> = TServer extends {
+export type Output<
+  TServer,
+  TKey extends RequestKey<TServer>,
+> = TServer extends {
   readonly $types: { outputs: infer TOutputs };
 }
   ? TKey extends keyof TOutputs
@@ -50,10 +53,12 @@ export type Output<TServer, TKey extends RequestKey<TServer>> = TServer extends 
   : never;
 
 export type IdentityClientResult<T> =
-  | { data: T; error: null }
-  | { data: null; error: IdentityClientError };
+  { data: T; error: null } | { data: null; error: IdentityClientError };
 
-export type PreparedIdentityRequest<TServer, TKey extends RequestKey<TServer>> = {
+export type PreparedIdentityRequest<
+  TServer,
+  TKey extends RequestKey<TServer>,
+> = {
   readonly expiresAt: string;
   present(): Promise<IdentityClientResult<Output<TServer, TKey>>>;
 };
@@ -74,31 +79,36 @@ type PreparedResponse = {
 function clientErrorFromResponse(payload: unknown): IdentityClientError {
   if (isRecord(payload) && isRecord(payload.error)) {
     const error = payload.error;
-    if (isIdentityErrorCode(error.code) && typeof error.message === 'string') {
+    if (isIdentityErrorCode(error.code) && typeof error.message === "string") {
       return { code: error.code, message: error.message };
     }
   }
-  return { code: 'SERVER_ERROR', message: 'The identity server request failed.' };
+  return {
+    code: "SERVER_ERROR",
+    message: "The identity server request failed.",
+  };
 }
 
-function inferPlatform(capabilities: IdentityCapabilities): 'ios' | 'android' | 'web' {
-  if (capabilities.protocols.includes('apple-wallet')) {
-    return 'ios';
+function inferPlatform(
+  capabilities: IdentityCapabilities,
+): "ios" | "android" | "web" {
+  if (capabilities.protocols.includes("apple-wallet")) {
+    return "ios";
   }
-  if (capabilities.origin?.startsWith('android:apk-key-hash:')) {
-    return 'android';
+  if (capabilities.origin?.startsWith("android:apk-key-hash:")) {
+    return "android";
   }
-  return 'web';
+  return "web";
 }
 
 function parsePreparedResponse(payload: unknown): PreparedResponse {
   if (
     !isRecord(payload) ||
-    typeof payload.transactionId !== 'string' ||
+    typeof payload.transactionId !== "string" ||
     payload.transactionId.length === 0 ||
-    typeof payload.expiresAt !== 'string'
+    typeof payload.expiresAt !== "string"
   ) {
-    throw new TypeError('Invalid prepare response');
+    throw new TypeError("Invalid prepare response");
   }
   return {
     transactionId: payload.transactionId,
@@ -108,7 +118,7 @@ function parsePreparedResponse(payload: unknown): PreparedResponse {
 }
 
 export function createIdentityClient<TServer = IdentityServerTypeContract>(
-  config: IdentityClientConfig = {}
+  config: IdentityClientConfig = {},
 ): {
   prepare<TKey extends RequestKey<TServer>>(input: {
     request: TKey;
@@ -119,19 +129,19 @@ export function createIdentityClient<TServer = IdentityServerTypeContract>(
 } {
   const fetchImplementation = config.fetch ?? globalThis.fetch;
   const handler = config.handler ?? defaultHandler;
-  const baseURL = (config.baseURL ?? '').replace(/\/$/, '');
-  const configuredBasePath = config.basePath ?? '/api/identity';
-  const basePath = `/${configuredBasePath.replace(/^\/+|\/+$/g, '')}`;
+  const baseURL = (config.baseURL ?? "").replace(/\/$/, "");
+  const configuredBasePath = config.basePath ?? "/api/identity";
+  const basePath = `/${configuredBasePath.replace(/^\/+|\/+$/g, "")}`;
 
   async function complete<TKey extends RequestKey<TServer>>(
     transactionId: string,
-    credential: ProtocolCredential
+    credential: ProtocolCredential,
   ): Promise<IdentityClientResult<Output<TServer, TKey>>> {
     let response: Response;
     try {
       response = await fetchImplementation(`${baseURL}${basePath}/complete`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        method: "POST",
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({ transactionId, credential }),
       });
     } catch (error) {
@@ -139,8 +149,8 @@ export function createIdentityClient<TServer = IdentityServerTypeContract>(
         data: null,
         error: normalizeIdentityError(
           error,
-          'NETWORK_ERROR',
-          'Could not reach the identity server.'
+          "NETWORK_ERROR",
+          "Could not reach the identity server.",
         ),
       };
     }
@@ -152,8 +162,8 @@ export function createIdentityClient<TServer = IdentityServerTypeContract>(
       return {
         data: null,
         error: {
-          code: 'INVALID_RESPONSE',
-          message: 'The identity server returned an invalid response.',
+          code: "INVALID_RESPONSE",
+          message: "The identity server returned an invalid response.",
         },
       };
     }
@@ -174,8 +184,8 @@ export function createIdentityClient<TServer = IdentityServerTypeContract>(
         data: null,
         error: normalizeIdentityError(
           error,
-          'UNAVAILABLE',
-          'Digital identity presentation is unavailable on this platform.'
+          "UNAVAILABLE",
+          "Digital identity presentation is unavailable on this platform.",
         ),
       };
     }
@@ -183,8 +193,8 @@ export function createIdentityClient<TServer = IdentityServerTypeContract>(
     let response: Response;
     try {
       response = await fetchImplementation(`${baseURL}${basePath}/prepare`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        method: "POST",
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({
           request: input.request,
           platform: inferPlatform(capabilities),
@@ -197,8 +207,8 @@ export function createIdentityClient<TServer = IdentityServerTypeContract>(
         data: null,
         error: normalizeIdentityError(
           error,
-          'NETWORK_ERROR',
-          'Could not reach the identity server.'
+          "NETWORK_ERROR",
+          "Could not reach the identity server.",
         ),
       };
     }
@@ -210,8 +220,8 @@ export function createIdentityClient<TServer = IdentityServerTypeContract>(
       return {
         data: null,
         error: {
-          code: 'INVALID_RESPONSE',
-          message: 'The identity server returned an invalid response.',
+          code: "INVALID_RESPONSE",
+          message: "The identity server returned an invalid response.",
         },
       };
     }
@@ -226,31 +236,35 @@ export function createIdentityClient<TServer = IdentityServerTypeContract>(
       return {
         data: null,
         error: {
-          code: 'INVALID_RESPONSE',
-          message: 'The identity server returned an invalid identity request.',
+          code: "INVALID_RESPONSE",
+          message: "The identity server returned an invalid identity request.",
         },
       };
     }
 
-    let state: 'ready' | 'presenting' | 'consumed' = 'ready';
+    let state: "ready" | "presenting" | "consumed" = "ready";
     const result: PreparedIdentityRequest<TServer, TKey> = {
       expiresAt: prepared.expiresAt,
       async present() {
-        if (state !== 'ready') {
+        if (state !== "ready") {
           return {
             data: null,
             error: {
-              code: 'REQUEST_IN_PROGRESS',
-              message: 'This identity request is already in progress or has been used.',
+              code: "REQUEST_IN_PROGRESS",
+              message:
+                "This identity request is already in progress or has been used.",
             },
           };
         }
-        state = 'presenting';
+        state = "presenting";
         if (Date.now() >= Date.parse(prepared.expiresAt)) {
-          state = 'consumed';
+          state = "consumed";
           return {
             data: null,
-            error: { code: 'EXPIRED', message: 'The identity request has expired.' },
+            error: {
+              code: "EXPIRED",
+              message: "The identity request has expired.",
+            },
           };
         }
 
@@ -258,18 +272,18 @@ export function createIdentityClient<TServer = IdentityServerTypeContract>(
         try {
           credential = await handler.present(prepared.request);
         } catch (error) {
-          state = 'consumed';
+          state = "consumed";
           return {
             data: null,
             error: normalizeIdentityError(
               error,
-              'UNAVAILABLE',
-              'Digital identity presentation failed.'
+              "UNAVAILABLE",
+              "Digital identity presentation failed.",
             ),
           };
         }
 
-        state = 'consumed';
+        state = "consumed";
         return complete<TKey>(prepared.transactionId, credential);
       },
     };

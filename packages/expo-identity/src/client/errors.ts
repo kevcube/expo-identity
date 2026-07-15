@@ -1,16 +1,16 @@
-import { isRecord } from '../shared/protocol';
+import { isRecord } from "../shared/protocol";
 
 export type IdentityErrorCode =
-  | 'UNAVAILABLE'
-  | 'CANCELLED'
-  | 'REQUEST_IN_PROGRESS'
-  | 'INVALID_REQUEST'
-  | 'NETWORK_ERROR'
-  | 'EXPIRED'
-  | 'INVALID_RESPONSE'
-  | 'UNTRUSTED_ISSUER'
-  | 'VERIFICATION_FAILED'
-  | 'SERVER_ERROR';
+  | "UNAVAILABLE"
+  | "CANCELLED"
+  | "REQUEST_IN_PROGRESS"
+  | "INVALID_REQUEST"
+  | "NETWORK_ERROR"
+  | "EXPIRED"
+  | "INVALID_RESPONSE"
+  | "UNTRUSTED_ISSUER"
+  | "VERIFICATION_FAILED"
+  | "SERVER_ERROR";
 
 export type IdentityClientError = {
   code: IdentityErrorCode;
@@ -22,7 +22,7 @@ export class IdentityClientException extends Error {
 
   constructor(code: IdentityErrorCode, message: string) {
     super(message);
-    this.name = 'IdentityClientException';
+    this.name = "IdentityClientException";
     this.code = code;
   }
 }
@@ -40,14 +40,16 @@ const ERROR_CODES: Record<IdentityErrorCode, true> = {
   SERVER_ERROR: true,
 };
 
-export function isIdentityErrorCode(value: unknown): value is IdentityErrorCode {
-  return typeof value === 'string' && value in ERROR_CODES;
+export function isIdentityErrorCode(
+  value: unknown,
+): value is IdentityErrorCode {
+  return typeof value === "string" && value in ERROR_CODES;
 }
 
 export function normalizeIdentityError(
   error: unknown,
   fallbackCode: IdentityErrorCode,
-  fallbackMessage: string
+  fallbackMessage: string,
 ): IdentityClientError {
   if (error instanceof IdentityClientException) {
     return { code: error.code, message: error.message };
@@ -55,7 +57,7 @@ export function normalizeIdentityError(
   if (
     isRecord(error) &&
     isIdentityErrorCode(error.code) &&
-    typeof error.message === 'string'
+    typeof error.message === "string"
   ) {
     return { code: error.code, message: error.message };
   }

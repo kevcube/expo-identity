@@ -15,33 +15,7 @@
     "scheme": "expo-identity",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "expo.modules.identity.example",
-      "infoPlist": {
-        "NSIdentityUsageDescription": "This app uses identity verification to demonstrate Apple's VerifyIdentityWithWallet API for secure age verification and identity confirmation testing."
-      },
-      "entitlements": {
-        "com.apple.developer.in-app-identity-presentment": {
-          "document-types": [
-            "us-drivers-license",
-            "us-state-id"
-          ],
-          "elements": [
-            "given-name",
-            "family-name",
-            "portrait",
-            "address",
-            "issuing-authority",
-            "document-expiration-date",
-            "document-number",
-            "driving-privileges",
-            "age",
-            "date-of-birth"
-          ]
-        },
-        "com.apple.developer.in-app-identity-presentment.merchant-identifiers": [
-          "merchant.dog.icecube.identitytest"
-        ]
-      }
+      "bundleIdentifier": "expo.modules.identity.example"
     },
     "android": {
       "adaptiveIcon": {
@@ -64,6 +38,24 @@
           }
         }
       ],
+      [
+        "expo-identity",
+        {
+          "ios": {
+            "usageDescription": "This app uses identity verification to demonstrate secure age verification with an identity document in Apple Wallet.",
+            "merchantIdentifiers": [
+              "merchant.dog.icecube.identitytest"
+            ],
+            "documentTypes": [
+              "us-drivers-license"
+            ],
+            "elements": [
+              "age"
+            ]
+          }
+        }
+      ],
+      "./plugins/withIosSceneLifecycle",
       "expo-dev-menu",
       "expo-router"
     ]

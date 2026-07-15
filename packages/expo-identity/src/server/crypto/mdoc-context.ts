@@ -1,15 +1,14 @@
-import 'reflect-metadata';
+import "reflect-metadata";
 
-import { CoseKey, MacAlgorithm, SignatureAlgorithm } from '@owf/cose';
-import type { MdocContext } from '@owf/mdoc';
-import { p256 } from '@noble/curves/nist.js';
-import { hkdf } from '@noble/hashes/hkdf.js';
-import { hmac } from '@noble/hashes/hmac.js';
-import { sha256 } from '@noble/hashes/sha2.js';
-import { sha384, sha512 } from '@noble/hashes/sha2.js';
-import { X509Certificate } from '@peculiar/x509';
+import { p256 } from "@noble/curves/nist.js";
+import { hkdf } from "@noble/hashes/hkdf.js";
+import { hmac } from "@noble/hashes/hmac.js";
+import { sha256, sha384, sha512 } from "@noble/hashes/sha2.js";
+import { CoseKey, MacAlgorithm, SignatureAlgorithm } from "@owf/cose";
+import type { MdocContext } from "@owf/mdoc";
+import { X509Certificate } from "@peculiar/x509";
 
-import { bytesToBase64url } from './wintercg-context';
+import { bytesToBase64url } from "./wintercg-context";
 
 function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
   if (left.length !== right.length) {
@@ -23,13 +22,13 @@ function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
 }
 
 function digestBytes(
-  algorithm: 'SHA-256' | 'SHA-384' | 'SHA-512',
-  bytes: Uint8Array
+  algorithm: "SHA-256" | "SHA-384" | "SHA-512",
+  bytes: Uint8Array,
 ): Uint8Array {
-  if (algorithm === 'SHA-256') {
+  if (algorithm === "SHA-256") {
     return sha256(bytes);
   }
-  if (algorithm === 'SHA-384') {
+  if (algorithm === "SHA-384") {
     return sha384(bytes);
   }
   return sha512(bytes);
@@ -43,12 +42,12 @@ function assertEs256(algorithm: number | undefined): void {
 
 async function publicCoseKey(certificate: X509Certificate): Promise<CoseKey> {
   const cryptoKey = await certificate.publicKey.export(
-    { name: 'ECDSA', namedCurve: 'P-256' },
-    ['verify'],
-    crypto
+    { name: "ECDSA", namedCurve: "P-256" },
+    ["verify"],
+    crypto,
   );
-  const jwk = await crypto.subtle.exportKey('jwk', cryptoKey);
-  return CoseKey.fromJwk({ ...jwk, alg: 'ES256' });
+  const jwk = await crypto.subtle.exportKey("jwk", cryptoKey);
+  return CoseKey.fromJwk({ ...jwk, alg: "ES256" });
 }
 
 function parseDerCertificate(value: Uint8Array): X509Certificate {
@@ -61,10 +60,14 @@ async function verifyChain(input: {
   now?: Date;
 }): Promise<{ chain: Uint8Array[] }> {
   if (input.x5chain.length === 0 || input.trustedCertificates.length === 0) {
-    throw new TypeError('Certificate chain and trust anchors must not be empty');
+    throw new TypeError(
+      "Certificate chain and trust anchors must not be empty",
+    );
   }
   const now = input.now ?? new Date();
-  const chainBytes = input.x5chain.map((certificate) => Uint8Array.from(certificate));
+  const chainBytes = input.x5chain.map((certificate) =>
+    Uint8Array.from(certificate),
+  );
   const chain = chainBytes.map(parseDerCertificate);
   const trusted = input.trustedCertificates.map((certificate) => ({
     bytes: Uint8Array.from(certificate),
@@ -73,11 +76,18 @@ async function verifyChain(input: {
 
   for (const [index, certificate] of chain.entries()) {
     if (certificate.notBefore > now || certificate.notAfter < now) {
-      throw new TypeError(`Certificate chain entry ${index} is not currently valid`);
+      throw new TypeError(
+        `Certificate chain entry ${index} is not currently valid`,
+      );
     }
     const issuer = chain[index + 1];
-    if (issuer && !(await certificate.verify({ publicKey: issuer, date: now }, crypto))) {
-      throw new TypeError(`Certificate chain entry ${index} has an invalid signature`);
+    if (
+      issuer &&
+      !(await certificate.verify({ publicKey: issuer, date: now }, crypto))
+    ) {
+      throw new TypeError(
+        `Certificate chain entry ${index} has an invalid signature`,
+      );
     }
   }
 
@@ -94,7 +104,9 @@ async function verifyChain(input: {
       return { chain: [...chainBytes, anchor.bytes] };
     }
   }
-  throw new TypeError('Certificate chain does not terminate at a trusted anchor');
+  throw new TypeError(
+    "Certificate chain does not terminate at a trusted anchor",
+  );
 }
 
 export const wintercgMdocContext: MdocContext = {
@@ -109,7 +121,9 @@ export const wintercgMdocContext: MdocContext = {
       return digestBytes(digestAlgorithm, bytes);
     },
     hdkf({ privateKey, publicKey, salt, info }) {
-      const shared = p256.getSharedSecret(privateKey, publicKey, false).slice(1, 33);
+      const shared = p256
+        .getSharedSecret(privateKey, publicKey, false)
+        .slice(1, 33);
       return hkdf(sha256, shared, salt, info, 32);
     },
   },
@@ -117,12 +131,12 @@ export const wintercgMdocContext: MdocContext = {
     sign1: {
       async sign({ toBeSigned, key, algorithm }) {
         assertEs256(algorithm);
-        return p256.sign(toBeSigned, key.privateKey, { format: 'compact' });
+        return p256.sign(toBeSigned, key.privateKey, { format: "compact" });
       },
       async verify({ toBeVerified, signature, key, algorithm }) {
         assertEs256(algorithm);
         return p256.verify(signature, toBeVerified, key.publicKey, {
-          format: 'compact',
+          format: "compact",
           lowS: false,
         });
       },
@@ -166,11 +180,11 @@ export const wintercgMdocContext: MdocContext = {
         subjectName: parsed.subject,
         serialNumber: parsed.serialNumber,
         thumbprint: bytesToBase64url(
-          new Uint8Array(await parsed.getThumbprint('SHA-256', crypto))
+          new Uint8Array(await parsed.getThumbprint("SHA-256", crypto)),
         ),
         notBefore: parsed.notBefore,
         notAfter: parsed.notAfter,
-        pem: parsed.toString('pem'),
+        pem: parsed.toString("pem"),
       };
     },
   },

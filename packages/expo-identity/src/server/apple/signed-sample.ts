@@ -3,13 +3,13 @@ import {
   CipherSuite,
   DhkemP256HkdfSha256,
   HkdfSha256,
-} from '@hpke/core';
-import { cborDecode, cborEncode } from '@owf/cose';
+} from "@hpke/core";
+import { cborDecode, cborEncode } from "@owf/cose";
 
-import { isRecord } from '../../shared/protocol';
-import type { InitializedAppleCredential } from '../crypto/initialize';
-import { base64urlToBytes, sha256 } from '../crypto/wintercg-context';
-import { decodeAppleEnvelope } from './protocol';
+import { decodeAppleEnvelope } from "./protocol";
+import { isRecord } from "../../shared/protocol";
+import type { InitializedAppleCredential } from "../crypto/initialize";
+import { base64urlToBytes, sha256 } from "../crypto/wintercg-context";
 
 const EMPTY_AAD = new ArrayBuffer(0);
 const hpkeSuite = new CipherSuite({
@@ -33,12 +33,14 @@ function identityFromPlaintext(plaintext: Uint8Array): Uint8Array {
   const decoded: unknown = cborDecode(plaintext);
   let identity: unknown;
   if (decoded instanceof Map) {
-    identity = decoded.get('identity');
+    identity = decoded.get("identity");
   } else if (isRecord(decoded)) {
     identity = decoded.identity;
   }
   if (!(identity instanceof Map) && !isRecord(identity)) {
-    throw new TypeError('Apple sample plaintext does not contain an identity response');
+    throw new TypeError(
+      "Apple sample plaintext does not contain an identity response",
+    );
   }
   return cborEncode(identity);
 }
@@ -53,13 +55,15 @@ export async function decryptSignedAppleSample(input: {
   const envelope = decodeAppleEnvelope(input.encryptedData);
   const expectedKeyHash = base64urlToBytes(input.credential.encryptionKeyHash);
   if (!equalBytes(envelope.pkRHash, expectedKeyHash)) {
-    throw new TypeError('Apple sample uses a different merchant encryption key');
+    throw new TypeError(
+      "Apple sample uses a different merchant encryption key",
+    );
   }
   const sessionTranscript = cborEncode([
     null,
     null,
     [
-      'AppleIdentityPresentment_1.0',
+      "AppleIdentityPresentment_1.0",
       input.nonce,
       input.merchantIdentifier,
       input.teamIdentifier,
@@ -67,10 +71,10 @@ export async function decryptSignedAppleSample(input: {
     ],
   ]);
   if (!envelope.infoHash) {
-    throw new TypeError('Apple sample envelope has no info hash');
+    throw new TypeError("Apple sample envelope has no info hash");
   }
   if (!equalBytes(envelope.infoHash, await sha256(sessionTranscript))) {
-    throw new TypeError('Apple sample transcript hash does not match');
+    throw new TypeError("Apple sample transcript hash does not match");
   }
   const recipient = await hpkeSuite.createRecipientContext({
     recipientKey: input.credential.decryptionKey,
@@ -79,7 +83,7 @@ export async function decryptSignedAppleSample(input: {
   });
   const plaintext = await recipient.open(
     Uint8Array.from(envelope.ciphertext).buffer,
-    EMPTY_AAD
+    EMPTY_AAD,
   );
   return {
     deviceResponse: identityFromPlaintext(new Uint8Array(plaintext)),

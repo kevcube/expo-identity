@@ -1,4 +1,4 @@
-import { DataItem, cborDecode, cborEncode } from '@owf/cose';
+import { DataItem, cborDecode, cborEncode } from "@owf/cose";
 import {
   DateOnly,
   DeviceResponse,
@@ -6,8 +6,9 @@ import {
   type DeviceRequest,
   type Document,
   type VerificationAssessment,
-} from '@owf/mdoc';
+} from "@owf/mdoc";
 
+import type { IdentityProtocol } from "../../shared/protocol";
 import {
   resolveIdentityClaim,
   type IdentityByteValue,
@@ -15,11 +16,10 @@ import {
   type IdentityRequestDefinition,
   type JsonValue,
   type VerifiedIdentity,
-} from '../../shared/requests';
-import type { IdentityProtocol } from '../../shared/protocol';
-import type { InitializedServerCrypto } from '../crypto/initialize';
-import { bytesToBase64url } from '../crypto/wintercg-context';
-import { wintercgMdocContext } from '../crypto/mdoc-context';
+} from "../../shared/requests";
+import type { InitializedServerCrypto } from "../crypto/initialize";
+import { wintercgMdocContext } from "../crypto/mdoc-context";
+import { bytesToBase64url } from "../crypto/wintercg-context";
 
 function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
   if (left.length !== right.length) {
@@ -33,18 +33,22 @@ function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
 }
 
 function normalizeMdocValue(value: unknown): JsonValue | IdentityByteValue {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean"
+  ) {
     return value;
   }
-  if (typeof value === 'number') {
+  if (typeof value === "number") {
     if (!Number.isFinite(value)) {
-      throw new TypeError('mdoc contains a non-finite number');
+      throw new TypeError("mdoc contains a non-finite number");
     }
     return Number.isSafeInteger(value) || !Number.isInteger(value)
       ? value
-      : value.toLocaleString('fullwide', { useGrouping: false });
+      : value.toLocaleString("fullwide", { useGrouping: false });
   }
-  if (typeof value === 'bigint') {
+  if (typeof value === "bigint") {
     return value.toString(10);
   }
   if (value instanceof DateOnly) {
@@ -62,25 +66,27 @@ function normalizeMdocValue(value: unknown): JsonValue | IdentityByteValue {
   if (value instanceof Map) {
     const normalized: Record<string, JsonValue | IdentityByteValue> = {};
     for (const [key, entry] of value) {
-      if (typeof key !== 'string') {
-        throw new TypeError('mdoc map keys must be strings');
+      if (typeof key !== "string") {
+        throw new TypeError("mdoc map keys must be strings");
       }
       normalized[key] = normalizeMdocValue(entry);
     }
     return normalized;
   }
-  if (typeof value === 'object' && value !== null) {
+  if (typeof value === "object" && value !== null) {
     const normalized: Record<string, JsonValue | IdentityByteValue> = {};
     for (const [key, entry] of Object.entries(value)) {
       normalized[key] = normalizeMdocValue(entry);
     }
     return normalized;
   }
-  throw new TypeError('mdoc contains a value that cannot be represented as JSON');
+  throw new TypeError(
+    "mdoc contains a value that cannot be represented as JSON",
+  );
 }
 
 function throwOnFailedCheck(assessment: VerificationAssessment): void {
-  if (assessment.status === 'FAILED') {
+  if (assessment.status === "FAILED") {
     throw new TypeError(assessment.check);
   }
 }
@@ -88,17 +94,20 @@ function throwOnFailedCheck(assessment: VerificationAssessment): void {
 async function verifyAppleDocument(input: {
   document: Document;
   sessionTranscript: Uint8Array;
-  trustedCertificates: Array<{ issuance: Uint8Array[]; status: Uint8Array[] }>;
+  trustedCertificates: { issuance: Uint8Array[]; status: Uint8Array[] }[];
   now: Date;
 }): Promise<void> {
-  const deviceSignature = input.document.deviceSigned.deviceAuth.deviceSignature!;
+  const deviceSignature =
+    input.document.deviceSigned.deviceAuth.deviceSignature!;
   const deviceAuthentication = cborEncode(
     DataItem.fromData([
-      'DeviceAuthentication',
+      "DeviceAuthentication",
       cborDecode(input.sessionTranscript),
       input.document.docType,
-      DataItem.fromData(input.document.deviceSigned.deviceNamespaces.encodedStructure),
-    ])
+      DataItem.fromData(
+        input.document.deviceSigned.deviceNamespaces.encodedStructure,
+      ),
+    ]),
   );
   const deviceKey =
     input.document.issuerSigned.issuerAuth.mobileSecurityObject.deviceKeyInfo
@@ -111,12 +120,12 @@ async function verifyAppleDocument(input: {
     signature: deviceSignature.signature,
   });
   if (!validDeviceSignature) {
-    throw new TypeError('Device signature is invalid');
+    throw new TypeError("Device signature is invalid");
   }
   const issuerAuth = input.document.issuerSigned.issuerAuth;
   const trustedChain = await wintercgMdocContext.x509.verifyCertificateChain({
     trustedCertificates: input.trustedCertificates.flatMap(
-      ({ issuance }) => issuance
+      ({ issuance }) => issuance,
     ),
     x5chain: issuerAuth.certificateChain,
     now: input.now,
@@ -128,10 +137,10 @@ async function verifyAppleDocument(input: {
   if (
     !(await issuerAuth.verifySignature(
       { key: issuerPublicKey },
-      wintercgMdocContext.cose.sign1
+      wintercgMdocContext.cose.sign1,
     ))
   ) {
-    throw new TypeError('Issuer signature is invalid');
+    throw new TypeError("Issuer signature is invalid");
   }
   const { validityInfo } = issuerAuth.mobileSecurityObject;
   const issuerCertificate = await wintercgMdocContext.x509.getCertificateData({
@@ -141,16 +150,16 @@ async function verifyAppleDocument(input: {
     !validityInfo.isSignedBetweenDates(
       issuerCertificate.notBefore,
       issuerCertificate.notAfter,
-      30
+      30,
     ) ||
     !validityInfo.isValidFromBeforeNow(input.now, 30) ||
     !validityInfo.isValidUntilAfterNow(input.now, 30)
   ) {
-    throw new TypeError('Issuer credential is outside its validity period');
+    throw new TypeError("Issuer credential is outside its validity period");
   }
   const trustedRoot = trustedChain.chain.at(-1)!;
   const statusCertificates = input.trustedCertificates.find(({ issuance }) =>
-    issuance.some((certificate) => equalBytes(certificate, trustedRoot))
+    issuance.some((certificate) => equalBytes(certificate, trustedRoot)),
   )?.status;
   await issuerAuth.verifyStatus(
     {
@@ -158,14 +167,14 @@ async function verifyAppleDocument(input: {
       checkFreshness: true,
       trustedStatusCertificates: statusCertificates,
     },
-    wintercgMdocContext
+    wintercgMdocContext,
   );
   for (const [namespace, items] of input.document.issuerSigned.issuerNamespaces
     .issuerNamespaces) {
     for (const item of items) {
       if (!(await item.isValid(namespace, issuerAuth, wintercgMdocContext))) {
         throw new TypeError(
-          `Issuer digest is invalid for ${namespace}.${item.elementIdentifier}`
+          `Issuer digest is invalid for ${namespace}.${item.elementIdentifier}`,
         );
       }
     }
@@ -182,7 +191,7 @@ export async function verifyMdocDeviceResponse<
   request: TRequest;
   crypto: InitializedServerCrypto;
   protocol: IdentityProtocol;
-  assurance: 'verified' | 'simulator';
+  assurance: "verified" | "simulator";
   deviceRequest?: DeviceRequest;
   now?: Date;
 }): Promise<VerifiedIdentity<TRequestKey, TRequest>> {
@@ -190,34 +199,39 @@ export async function verifyMdocDeviceResponse<
   try {
     response = DeviceResponse.decode(input.deviceResponse);
   } catch (error) {
-    throw new TypeError('Credential is not a valid ISO mdoc DeviceResponse', {
+    throw new TypeError("Credential is not a valid ISO mdoc DeviceResponse", {
       cause: error,
     });
   }
   if (!equalBytes(response.encode(), input.deviceResponse)) {
-    throw new TypeError('Credential uses noncanonical or malformed CBOR');
+    throw new TypeError("Credential uses noncanonical or malformed CBOR");
   }
   if (response.status !== 0) {
     throw new TypeError(`DeviceResponse status is ${response.status}`);
   }
   if ((response.documentErrors?.length ?? 0) !== 0) {
-    throw new TypeError('DeviceResponse contains document errors');
+    throw new TypeError("DeviceResponse contains document errors");
   }
   if (response.documents?.length !== 1) {
-    throw new TypeError('DeviceResponse must contain exactly one document');
+    throw new TypeError("DeviceResponse must contain exactly one document");
   }
   const document = response.documents[0];
   if (!document || document.docType !== input.request.document.doctype) {
-    throw new TypeError('DeviceResponse document type does not match the request');
+    throw new TypeError(
+      "DeviceResponse document type does not match the request",
+    );
   }
   if ((document.errors?.size ?? 0) !== 0) {
-    throw new TypeError('DeviceResponse document contains errors');
+    throw new TypeError("DeviceResponse document contains errors");
   }
   if (document.deviceSigned.deviceAuth.deviceMac) {
-    throw new TypeError('DeviceMAC responses are not accepted');
+    throw new TypeError("DeviceMAC responses are not accepted");
   }
-  if (!document.deviceSigned.deviceAuth.deviceSignature && input.assurance === 'verified') {
-    throw new TypeError('DeviceResponse is missing its device signature');
+  if (
+    !document.deviceSigned.deviceAuth.deviceSignature &&
+    input.assurance === "verified"
+  ) {
+    throw new TypeError("DeviceResponse is missing its device signature");
   }
 
   const itemsByNamespace = new Map<string, Map<string, unknown>>();
@@ -227,7 +241,7 @@ export async function verifyMdocDeviceResponse<
     for (const item of items) {
       if (values.has(item.elementIdentifier)) {
         throw new TypeError(
-          `DeviceResponse repeats ${namespace}.${item.elementIdentifier}`
+          `DeviceResponse repeats ${namespace}.${item.elementIdentifier}`,
         );
       }
       values.set(item.elementIdentifier, item.elementValue);
@@ -235,19 +249,19 @@ export async function verifyMdocDeviceResponse<
     itemsByNamespace.set(namespace, values);
   }
 
-  if (input.assurance === 'verified') {
+  if (input.assurance === "verified") {
     const trustedCertificates = input.crypto.trustAnchors.map((anchors) => ({
       issuance: anchors.issuance.map(
-        (certificate) => new Uint8Array(certificate.rawData)
+        (certificate) => new Uint8Array(certificate.rawData),
       ),
       status: anchors.status.map(
-        (certificate) => new Uint8Array(certificate.rawData)
+        (certificate) => new Uint8Array(certificate.rawData),
       ),
     }));
     if (trustedCertificates.length === 0) {
-      throw new TypeError('No issuer trust anchors are configured');
+      throw new TypeError("No issuer trust anchors are configured");
     }
-    if (input.protocol === 'apple-wallet') {
+    if (input.protocol === "apple-wallet") {
       await verifyAppleDocument({
         document,
         sessionTranscript: input.sessionTranscript,
@@ -264,7 +278,7 @@ export async function verifyMdocDeviceResponse<
           now: input.now,
           onCheck: throwOnFailedCheck,
         },
-        wintercgMdocContext
+        wintercgMdocContext,
       );
     }
   }
@@ -277,7 +291,7 @@ export async function verifyMdocDeviceResponse<
       ?.get(resolved.identifier);
     if (value === undefined) {
       throw new TypeError(
-        `DeviceResponse is missing ${resolved.namespace}.${resolved.identifier}`
+        `DeviceResponse is missing ${resolved.namespace}.${resolved.identifier}`,
       );
     }
     claims[alias] = normalizeMdocValue(value);

@@ -1,345 +1,259 @@
 # expo-identity
 
-An Expo module for Apple's **VerifyIdentityWithWallet** API - secure identity verification using digital IDs stored in Apple Wallet.
+Typed ISO mdoc presentation for Expo apps and WinterCG servers. The client asks the server to prepare a request, invokes the platform wallet with only that opaque request, and submits the opaque credential for server-side verification. Applications receive only the configured, server-verified claim aliases.
 
-## Features
+This release supports ISO mdoc. It does not support SD-JWT VC.
 
-- **VerifyIdentityWithWallet button** - Native iOS 18+ button component
-- **Flexible identity element requests** - Request any identity data elements
-- **Age verification** - Including parameterized age thresholds (e.g., 21+)
-- **Multiple document types** - Drivers license, state ID, national ID, photo ID
-- **Privacy-first** - Uses Apple's secure PassKit framework with user consent
+## Install
 
-## Requirements
-
-- **iOS 18.0+** for VerifyIdentityWithWallet API
-- **iOS 16.5+** (iPhone 8+) or **iOS 17.5+** (iPhone XS+) depending on US state
-- **Japan**: iPhone XS+ with iOS 18.5+
-- Compatible identity document in Apple Wallet
-- **Apple Developer Program** membership for entitlements
-
-## Installation
-
-```bash
+```sh
 npm install expo-identity
-# or
-yarn add expo-identity
 ```
 
-## ⚠️ Required Configuration
+The package exports:
 
-### 1. **Entitlements File**
+- `expo-identity` and `expo-identity/client` for shared request types and the typed client
+- `expo-identity/client/ios`, `/android`, and `/web` for explicit platform handlers
+- `expo-identity/server` for the WinterCG server
 
-Create `[YourApp].entitlements` and add to your Xcode project:
+There is no default native-module export or wallet button component.
 
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<key>com.apple.developer.in-app-identity-presentment</key>
-	<dict>
-		<key>document-types</key>
-		<array>
-			<string>us-drivers-license</string>
-			<string>us-state-id</string>
-		</array>
-		<key>elements</key>
-		<array>
-			<string>given-name</string>
-			<string>family-name</string>
-			<string>portrait</string>
-			<string>address</string>
-			<string>issuing-authority</string>
-			<string>document-expiration-date</string>
-			<string>document-number</string>
-			<string>driving-privileges</string>
-			<string>age</string>
-			<string>date-of-birth</string>
-		</array>
-	</dict>
-	<key>com.apple.developer.in-app-identity-presentment.merchant-identifiers</key>
-	<array>
-		<string>merchant.com.yourapp.youridentifier</string>
-	</array>
-</dict>
-</plist>
+## Before configuring Apple Wallet
+
+Production Apple Wallet presentation requires material from several separate programs:
+
+1. Obtain Apple Developer approval for the In-App Identity Presentment entitlement for the app ID and requested document types/elements.
+2. In Identity Access, configure the merchant identifier and obtain the Apple identity encryption certificate and matching private key. The private key, team identifier, and certificate are server configuration, not app configuration.
+3. Configure explicit issuer/IACA trust anchors. `issuance` roots validate document issuer chains; `status` roots validate status artifacts.
+4. To support the web `org-iso-mdoc` protocol, obtain an Apple Business Connect reader-authentication certificate and matching private key.
+5. To support signed OpenID4VP, provision a verifier signing certificate chain and matching private key. Supply any wallet-vendor metadata issued to the relying party, such as Google's `gw_rp_metadata_bytes`.
+
+Never place encryption keys, signing keys, reader-authentication keys, team IDs, issuer roots, or server configuration in the Expo app.
+
+## Configure the Expo app
+
+Add the config plugin to `app.json`. These are entitlement declarations only:
+
+```json
+{
+  "expo": {
+    "plugins": [
+      [
+        "expo-identity",
+        {
+          "ios": {
+            "usageDescription": "Verify your identity using a document in Apple Wallet.",
+            "merchantIdentifiers": ["merchant.com.example.identity"],
+            "documentTypes": ["us-drivers-license"],
+            "elements": ["age"]
+          }
+        }
+      ]
+    ]
+  }
+}
 ```
 
-**Important Notes:**
-- **Document types**: Only include types your app will request (`us-drivers-license`, `us-state-id`)
-- **Elements**: Only include data elements your app needs - Apple reviews these carefully
-- **Merchant ID**: Must match your Apple Pay Merchant ID from Apple Developer portal
+The plugin sets `NSIdentityUsageDescription`, `com.apple.developer.in-app-identity-presentment`, and `com.apple.developer.in-app-identity-presentment.merchant-identifiers`. Document and element arrays are deduplicated. Their open string types allow newly introduced or explicitly granted Apple entitlement values.
 
-### 2. **Privacy Usage Description**
+## Define requests and create the server
 
-Add to your `Info.plist` (or app.json for Expo):
+Request object keys are public, stable request names. Claim object keys are stable result aliases. The server derives platform-specific element requests, retention policy, and protocol data from this definition; the client sends only a request key.
 
-```xml
-<key>NSIdentityUsageDescription</key>
-<string>This app uses identity verification to verify your age and identity for secure access.</string>
-```
+```ts
+// server/identity.ts
+import {
+  createMemoryTransactionStore,
+  defineIdentityRequests,
+  expoIdentity,
+} from "expo-identity/server";
 
-### 3. **Apple Developer Setup**
-
-1. **Create Merchant ID**: In Apple Developer portal, create an Apple Pay Merchant ID
-2. **Request Entitlement**: Submit entitlement request to Apple with:
-   - App details and use case
-   - List of required document types
-   - List of required data elements
-   - Privacy policy URL
-3. **Provisioning Profile**: Generate new profile including the identity entitlement
-4. **Certificates**: Create "Identity Access Certificate" for your Merchant ID
-
-### 4. **Xcode Project Settings**
-
-- Set `CODE_SIGN_ENTITLEMENTS = YourApp/YourApp.entitlements` in build settings
-- Ensure provisioning profile includes identity entitlement
-- Verify merchant identifier matches exactly
-
-## API
-
-### `VerifyIdentityWithWalletButton`
-
-The main component for identity verification. Renders Apple's native button and handles the verification flow.
-
-```typescript
-import { VerifyIdentityWithWalletButton } from 'expo-identity';
-import type { IdentityDocumentRequest } from 'expo-identity';
-
-const identityRequest: IdentityDocumentRequest = {
-  merchantIdentifier: 'merchant.com.yourapp.youridentifier',
-  driversLicense: {
-    elements: ['givenName', 'familyName', 'age'],
-    intentToStore: { intentToStore: 'willNotStore' },
+export const requests = defineIdentityRequests({
+  ageOver21: {
+    document: {
+      doctype: "org.iso.18013.5.1.mDL",
+      namespace: "org.iso.18013.5.1",
+      apple: "driversLicense",
+    },
+    claims: {
+      ageOver21: {
+        type: "ageAtLeast",
+        age: 21,
+        retain: false,
+      },
+    },
   },
-};
+});
 
-<VerifyIdentityWithWalletButton
-  documentKind="driversLicense"
-  label="verify"
-  buttonStyle="black"
-  identityRequest={identityRequest}
-  onCompletion={(event) => {
-    if (event.nativeEvent.ok) {
-      console.log('Verification successful!');
-    } else {
-      console.error('Verification failed:', event.nativeEvent.error);
-    }
-  }}
-/>
+export const identity = expoIdentity({
+  requests,
+  apple: { mode: "simulator" },
+  transactionStore: createMemoryTransactionStore(),
+  onVerified: ({ identity }) => ({
+    request: identity.request,
+    assurance: identity.assurance,
+    ageOver21: identity.document.claims.ageOver21,
+  }),
+});
 ```
 
-### Props
+`createMemoryTransactionStore()` is only for local development, tests, or one long-lived process. Production and serverless deployments must provide an `IdentityTransactionStore` backed by shared storage whose `take(id)` operation atomically reads and deletes the transaction. Every completion consumes its transaction before verification, whether verification succeeds or fails.
 
-- **`documentKind`**: `"driversLicense" | "nationalIDCard" | "photoID"` - Type of document to verify
-- **`label`**: `"continue" | "verify" | "verifyAge" | "verifyIdentity"` - Button label text
-- **`buttonStyle`**: `"black" | "blackOutline"` - Button appearance style
-- **`identityRequest`**: `IdentityDocumentRequest` - Configuration for what data to request
-- **`onCompletion`**: Callback when verification completes (success or failure)
-- **`onButtonPress`**: Callback when button is pressed
-- **`onAvailabilityChange`**: Callback when button availability changes
+Production configuration uses deployment-secret bindings rather than app-bundled values:
 
-### Identity Request Configuration
+```ts
+const identity = expoIdentity({
+  requests,
+  trustedOrigins: [
+    "https://app.example.com",
+    "android:apk-key-hash:<unpadded-base64-sha256-signing-certificate>",
+  ],
+  transactionStore,
+  transactionTTLSeconds: 300,
+  trustAnchors: [
+    {
+      issuance: [issuerRootPem],
+      status: [statusRootPem],
+    },
+  ],
+  apple: {
+    mode: "production",
+    merchantIdentifier,
+    teamIdentifier,
+    encryptionCertificate: appleEncryptionCertificatePem,
+    encryptionPrivateKey: appleEncryptionPrivateKeyPem,
+  },
+  openid4vp: {
+    clientMetadata: {
+      gw_rp_metadata_bytes: googleWalletRelyingPartyMetadata,
+    },
+    requestSigning: {
+      certificateChain: [verifierCertificatePem],
+      privateKey: verifierPrivateKeyPem,
+    },
+  },
+  readerAuthentication: {
+    certificateChain: [readerCertificatePem, readerIntermediatePem],
+    privateKey: readerPrivateKeyPem,
+  },
+});
+```
 
-```typescript
-interface IdentityDocumentRequest {
-  merchantIdentifier?: string; // Required - your Apple Pay Merchant ID
-  
-  driversLicense?: {
-    elements: (string | { type: "ageAtLeast", threshold: number })[];
-    intentToStore: { intentToStore: "willNotStore" | "mayStore", days?: number };
-  };
-  
-  nationalIDCard?: {
-    elements: (string | { type: "ageAtLeast", threshold: number })[];
-    intentToStore: { intentToStore: "willNotStore" | "mayStore", days?: number };
-  };
-  
-  photoID?: {
-    elements: (string | { type: "ageAtLeast", threshold: number })[];
-    intentToStore: { intentToStore: "willNotStore" | "mayStore", days?: number };
+`trustedOrigins` entries are exact. It may instead be an async predicate for a controlled dynamic-origin deployment. Configuration is validated by `identity.ready()` and before requests are handled: certificates are parsed, each private key must match its public key, trust anchors are checked, and package-owned OpenID encryption/JWKS/format metadata cannot be overridden.
+
+The server graph uses WinterCG APIs (`Request`, `Response`, WebCrypto, typed arrays, `atob`, and `btoa`) and does not require Node filesystem or `Buffer` APIs. Keep every certificate, private key, trust anchor, transaction, and callback side effect on this server boundary.
+
+## Mount the Expo Router handler
+
+Expose one catch-all API route:
+
+```ts
+// app/api/identity/[...all]+api.ts
+import { identity } from "../../../server/identity";
+
+export const POST = identity.handler;
+export const OPTIONS = identity.handler;
+```
+
+The handler serves only `POST /api/identity/prepare`, `POST /api/identity/complete`, and preflight requests. Set `basePath` on both server and client if the default `/api/identity` is not appropriate.
+
+## Create the typed client
+
+Parameterizing the client with `typeof identity` constrains request keys and infers the callback output.
+
+```ts
+import { createIdentityClient } from "expo-identity";
+import type { identity } from "./server/identity";
+
+const identityClient = createIdentityClient<typeof identity>();
+```
+
+`baseURL`, `basePath`, `fetch`, and an explicit `handler` can be supplied when needed. The default handler is selected by the Expo platform. Explicit handlers are also available:
+
+```ts
+import { iosIdentity } from "expo-identity/client/ios";
+import { androidIdentity } from "expo-identity/client/android";
+import { webIdentity } from "expo-identity/client/web";
+```
+
+### Reliable web flow: `prepare()` then `present()`
+
+Prepare before the user click. Call the prepared object's one-shot `present()` directly inside the click or press handler so browser transient user activation cannot expire during a network round trip:
+
+```ts
+const preparedResult = await identityClient.prepare({ request: "ageOver21" });
+
+if (preparedResult.error) {
+  renderError(preparedResult.error);
+} else {
+  verifyButton.onclick = async () => {
+    const result = await preparedResult.data.present();
+    if (result.error) {
+      renderError(result.error);
+      return;
+    }
+
+    const { request, assurance, ageOver21 } = result.data;
+    renderVerifiedResult({ request, assurance, ageOver21 });
   };
 }
 ```
 
-### Available Identity Elements
+A prepared request is consumed once, including cancellation and failure. Discard it and call `prepare()` again after every attempt.
 
-**Common Elements** (all document types):
-- `"givenName"` - First/given name
-- `"familyName"` - Last/family name  
-- `"portrait"` - Photo from ID
-- `"address"` - Full address
-- `"documentNumber"` - ID document number
-- `"dateOfBirth"` - Date of birth
-- `"age"` - Current age
-- `"sex"` - Gender (iOS 17.2+)
+### Convenience flow: `verify()`
 
-**Driver's License Specific**:
-- `"issuingAuthority"` - DMV or issuing authority
-- `"documentExpirationDate"` - License expiration
-- `"documentIssueDate"` - License issue date  
-- `"drivingPrivilege"` - Driving class/restrictions
+`verify()` performs `prepare()` followed by `present()`. It is convenient when user-activation timing is not a concern:
 
-**Age Threshold Element**:
-```typescript
-{ type: "ageAtLeast", threshold: 21 } // Verify user is 21+ without revealing exact age
-```
+```ts
+const result = await identityClient.verify({ request: "ageOver21" });
 
-### Module Functions
-
-```typescript
-import { canRequestIdentityDocument, requestIdentityDocument } from 'expo-identity';
-
-// Check if specific document type is available
-const canRequest = await canRequestIdentityDocument('driversLicense');
-
-// Programmatic verification (alternative to button component)
-const success = await requestIdentityDocument(identityRequest);
-```
-
-## Example
-
-```typescript
-import React, { useState } from 'react';
-import { View, Text, Alert } from 'react-native';
-import { VerifyIdentityWithWalletButton } from 'expo-identity';
-import type { IdentityDocumentRequest } from 'expo-identity';
-
-export default function App() {
-  const [verificationStatus, setVerificationStatus] = useState('Not verified');
-
-  // Configure what identity data to request
-  const identityRequest: IdentityDocumentRequest = {
-    merchantIdentifier: 'merchant.com.yourapp.youridentifier', // Replace with your Merchant ID
-    driversLicense: {
-      elements: ['givenName', 'familyName', 'age'],
-      intentToStore: { intentToStore: 'willNotStore' },
-    },
-  };
-
-  // Age verification example (21+)
-  const ageVerificationRequest: IdentityDocumentRequest = {
-    merchantIdentifier: 'merchant.com.yourapp.youridentifier',
-    driversLicense: {
-      elements: [{ type: 'ageAtLeast', threshold: 21 }],
-      intentToStore: { intentToStore: 'willNotStore' },
-    },
-  };
-
-  const handleCompletion = (event: any) => {
-    const { ok, error, code } = event.nativeEvent;
-    
-    if (ok) {
-      setVerificationStatus('✅ Verification successful!');
-      Alert.alert('Success', 'Identity verified successfully!');
-    } else {
-      setVerificationStatus(`❌ Verification failed: ${error}`);
-      console.error(`Verification failed [${code}]:`, error);
-    }
-  };
-
-  const handleButtonPress = (event: any) => {
-    console.log('Verification button pressed');
-    setVerificationStatus('🔄 Verification in progress...');
-  };
-
-  return (
-    <View style={{ flex: 1, padding: 20, justifyContent: 'center' }}>
-      <Text style={{ fontSize: 24, fontWeight: 'bold', textAlign: 'center', marginBottom: 30 }}>
-        Identity Verification Demo
-      </Text>
-
-      <Text style={{ fontSize: 16, textAlign: 'center', marginBottom: 20 }}>
-        Status: {verificationStatus}
-      </Text>
-
-      {/* Basic identity verification */}
-      <Text style={{ fontWeight: 'bold', marginBottom: 10 }}>Basic Identity Verification:</Text>
-      <VerifyIdentityWithWalletButton
-        documentKind="driversLicense"
-        label="verifyIdentity"
-        buttonStyle="black"
-        identityRequest={identityRequest}
-        onButtonPress={handleButtonPress}
-        onCompletion={handleCompletion}
-        style={{ marginBottom: 30 }}
-      />
-
-      {/* Age verification (21+) */}
-      <Text style={{ fontWeight: 'bold', marginBottom: 10 }}>Age Verification (21+):</Text>
-      <VerifyIdentityWithWalletButton
-        documentKind="driversLicense"
-        label="verifyAge"
-        buttonStyle="blackOutline"
-        identityRequest={ageVerificationRequest}
-        onButtonPress={handleButtonPress}
-        onCompletion={handleCompletion}
-      />
-    </View>
-  );
+if (result.error) {
+  renderError(result.error);
+} else {
+  console.log(result.data.ageOver21); // boolean, inferred from the server callback
 }
 ```
 
-## Troubleshooting
+Expected cancellation, availability, network, expiry, HTTP, malformed-response, trust, and verification failures return `{ data: null, error }`; successful calls return `{ data, error: null }`. Stable error codes are:
 
-### Common Error Codes
+- `UNAVAILABLE`
+- `CANCELLED`
+- `REQUEST_IN_PROGRESS`
+- `INVALID_REQUEST`
+- `NETWORK_ERROR`
+- `EXPIRED`
+- `INVALID_RESPONSE`
+- `UNTRUSTED_ISSUER`
+- `VERIFICATION_FAILED`
+- `SERVER_ERROR`
 
-**PKIdentityErrorDomain Code 6 (PKIdentityErrorNotSupported)**
-- ❌ **Cause**: Missing nonce in PKIdentityRequest *(fixed in this version)*
-- ❌ **Cause**: Invalid or missing merchant identifier  
-- ❌ **Cause**: Entitlement not approved by Apple
-- ❌ **Cause**: Testing on unsupported iOS version
-- ✅ **Solution**: Verify merchant ID matches entitlements exactly
+Messages intentionally do not reveal unrequested credentials or claims held by the wallet.
 
-**PKIdentityErrorDomain Code 4 (PKIdentityErrorNetworkUnavailable)**
-- ❌ **Cause**: No internet connection
-- ❌ **Cause**: Apple identity services unavailable
-- ✅ **Solution**: Check network connectivity and try again
+## Platform support
 
-**Privacy Crash: NSIdentityUsageDescription**
-- ❌ **Cause**: Missing privacy usage description
-- ✅ **Solution**: Add NSIdentityUsageDescription to Info.plist
+| Platform | Minimum | Protocols and notes |
+| --- | --- | --- |
+| iOS | iOS 16.4 on iPhone or Simulator | Apple in-app Wallet presentation. National ID descriptors require iOS 18; photo ID descriptors require iOS 26. |
+| Android | Android 9 / API 28 | AndroidX Credential Manager Digital Credentials; signed and unsigned OpenID4VP. |
+| Safari | Safari 26 | `org-iso-mdoc` through the browser Digital Credentials API. |
+| Chrome | Chrome 141 | Signed/unsigned OpenID4VP and `org-iso-mdoc`, subject to runtime protocol feature detection. |
 
-### Testing Tips
+Unsupported OS versions, document descriptors, entitlement values, wallet protocols, or unavailable credentials return `UNAVAILABLE`; requested elements are never silently dropped.
 
-1. **Use Simulator**: iOS Simulator supports mock identity verification for testing
-2. **Check Logs**: Enable console logging to see detailed error messages
-3. **Verify Entitlements**: Build logs show applied entitlements - confirm they match your file
-4. **Test Merchant ID**: Use your actual Apple Pay Merchant ID, not placeholder values
+## Verification and assurance
 
-### Getting Apple Entitlement Approval
+Production verification requires the expected protocol transcript, nonce, origin or merchant binding, one configured document, the requested namespace and elements, a chain to an explicit issuance anchor, certificate validity/status, MSO signature and validity, every disclosed item digest, and the device signature. DeviceMAC, unexpected documents, duplicate elements, unrequested output aliases, malformed CBOR, and replayed transactions fail closed.
 
-The `com.apple.developer.in-app-identity-presentment` entitlement requires Apple approval:
+`assurance: "verified"` is returned only after those production checks. `{ apple: { mode: "simulator" } }` selects package-owned Apple Simulator material and emits `assurance: "simulator"`; Apple's published Simulator identity has zeroed issuer/device signatures and no issuer certificate. Simulator mode never falls back into production, and applications must not treat simulator assurance as production proof.
 
-1. Submit detailed use case describing why you need identity verification
-2. Specify exact document types and data elements required
-3. Provide privacy policy URL explaining data usage
-4. Apple reviews typically take 1-2 weeks
-5. Only request elements you actually need - overly broad requests may be rejected
+## Key rotation
 
-## Privacy and Security
+Rotate without an untrusted gap:
 
-This module uses Apple's PassKit framework which ensures:
+1. Deploy overlapping old and new issuer/status trust anchors and any verifier or reader certificate chains.
+2. Begin issuing/signing new requests with the new private material while accepting in-flight transactions created with the old material.
+3. Wait beyond the maximum transaction and credential overlap period.
+4. Retire the old trust, signing, encryption, and reader-authentication material.
 
-- **User Consent**: Users must explicitly authorize each data sharing request
-- **Minimal Data**: Only requested elements are shared, never the full document
-- **Secure Transmission**: All data transmission is encrypted end-to-end
-- **No Background Access**: App cannot access wallet without active user interaction
-- **Device Authentication**: Requires Face ID/Touch ID for identity verification
-- **Apple Verification**: All identity documents are cryptographically verified by Apple
-
-## Supported Regions & Documents
-
-### United States
-- **Driver's License**: Most states (iOS 16.5+, iPhone 8+)
-- **State ID Cards**: Supported in participating states
-- **Requirements**: iPhone 8+ with iOS 16.5+ or iPhone XS+ with iOS 17.5+ (varies by state)
-
-### Japan  
-- **MyNumber Card**: iOS 18.5+, iPhone XS+
-- **Elements**: Additional Japan-specific elements available
-
-## License
-
-MIT
+Never replace production configuration with simulator material during rotation.

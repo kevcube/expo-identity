@@ -1,7 +1,4 @@
-import type {
-  IdentityTransaction,
-  IdentityTransactionStore,
-} from './types';
+import type { IdentityTransaction, IdentityTransactionStore } from "./types";
 
 export function createMemoryTransactionStore(): IdentityTransactionStore {
   const transactions = new Map<string, IdentityTransaction>();

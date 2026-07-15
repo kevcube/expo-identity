@@ -1,6 +1,6 @@
 export const APPLE_SIMULATOR_MERCHANT_IDENTIFIER =
-  'PassKit_Identity_Test_Merchant_ID';
-export const APPLE_SIMULATOR_TEAM_IDENTIFIER = 'PassKit_Identity_Test_Team_ID';
+  "PassKit_Identity_Test_Merchant_ID";
+export const APPLE_SIMULATOR_TEAM_IDENTIFIER = "PassKit_Identity_Test_Team_ID";
 
 export const APPLE_SIMULATOR_ENCRYPTION_CERTIFICATE = `-----BEGIN CERTIFICATE-----
 MIICnjCCAkQCCQCG6FiwTvkMhjAKBggqhkjOPQQDAjCB1TELMAkGA1UEBhMCVVMx

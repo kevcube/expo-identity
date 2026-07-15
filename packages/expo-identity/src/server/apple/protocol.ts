@@ -3,21 +3,18 @@ import {
   CipherSuite,
   DhkemP256HkdfSha256,
   HkdfSha256,
-} from '@hpke/core';
-import { cborDecode, cborEncode } from '@owf/cose';
+} from "@hpke/core";
+import { cborDecode, cborEncode } from "@owf/cose";
 
+import { isRecord, type ProtocolRequest } from "../../shared/protocol";
 import {
   resolveIdentityClaim,
   type IdentityRequestDefinition,
-} from '../../shared/requests';
-import { isRecord, type ProtocolRequest } from '../../shared/protocol';
-import type { InitializedAppleCredential } from '../crypto/initialize';
-import {
-  base64urlToBytes,
-  sha256,
-} from '../crypto/wintercg-context';
+} from "../../shared/requests";
+import type { InitializedAppleCredential } from "../crypto/initialize";
+import { base64urlToBytes, sha256 } from "../crypto/wintercg-context";
 
-const HPKE_INFO = new TextEncoder().encode('AppleIdentityPresentation_1.0');
+const HPKE_INFO = new TextEncoder().encode("AppleIdentityPresentation_1.0");
 const EMPTY_AAD = new ArrayBuffer(0);
 
 const hpkeSuite = new CipherSuite({
@@ -63,28 +60,36 @@ function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
 
 export function decodeAppleEnvelope(encryptedData: string): AppleEnvelope {
   const decoded: unknown = cborDecode(base64urlToBytes(encryptedData));
-  const algorithm = readContainerField(decoded, 'algorithm');
-  const params = readContainerField(decoded, 'params');
-  const ciphertext = readContainerField(decoded, 'data');
-  if (algorithm !== 'APPLE-HPKE-v1') {
-    throw new TypeError('Unsupported Apple identity envelope algorithm');
+  const algorithm = readContainerField(decoded, "algorithm");
+  const params = readContainerField(decoded, "params");
+  const ciphertext = readContainerField(decoded, "data");
+  if (algorithm !== "APPLE-HPKE-v1") {
+    throw new TypeError("Unsupported Apple identity envelope algorithm");
   }
-  const infoHash = readContainerField(params, 'infoHash');
+  const infoHash = readContainerField(params, "infoHash");
   return {
-    pkEm: requireBytes(readContainerField(params, 'pkEm'), 'params.pkEm'),
-    pkRHash: requireBytes(readContainerField(params, 'pkRHash'), 'params.pkRHash'),
-    infoHash: infoHash === undefined ? undefined : requireBytes(infoHash, 'params.infoHash'),
-    ciphertext: requireBytes(ciphertext, 'data'),
+    pkEm: requireBytes(readContainerField(params, "pkEm"), "params.pkEm"),
+    pkRHash: requireBytes(
+      readContainerField(params, "pkRHash"),
+      "params.pkRHash",
+    ),
+    infoHash:
+      infoHash === undefined
+        ? undefined
+        : requireBytes(infoHash, "params.infoHash"),
+    ciphertext: requireBytes(ciphertext, "data"),
   };
 }
 
 export function createAppleProtocolRequest(
   request: IdentityRequestDefinition,
   nonce: string,
-  credential: InitializedAppleCredential
+  credential: InitializedAppleCredential,
 ): ProtocolRequest {
   if (!request.document.apple) {
-    throw new TypeError('The selected request has no Apple document descriptor');
+    throw new TypeError(
+      "The selected request has no Apple document descriptor",
+    );
   }
   const elements = Object.entries(request.claims).map(([alias, claim]) => {
     const resolved = resolveIdentityClaim(request, claim);
@@ -99,7 +104,7 @@ export function createAppleProtocolRequest(
     };
   });
   return {
-    protocol: 'apple-wallet',
+    protocol: "apple-wallet",
     data: {
       merchantIdentifier: credential.merchantIdentifier,
       nonce,
@@ -119,11 +124,13 @@ export async function decryptAppleCredential(input: {
   const envelope = decodeAppleEnvelope(input.encryptedData);
   const expectedKeyHash = base64urlToBytes(input.credential.encryptionKeyHash);
   if (!equalBytes(envelope.pkRHash, expectedKeyHash)) {
-    throw new TypeError('Apple response was encrypted for a different merchant key');
+    throw new TypeError(
+      "Apple response was encrypted for a different merchant key",
+    );
   }
 
   const handover = [
-    'InAppPresentment',
+    "InAppPresentment",
     [
       input.credential.merchantIdentifier,
       input.credential.teamIdentifier,
@@ -135,7 +142,7 @@ export async function decryptAppleCredential(input: {
   if (envelope.infoHash) {
     const expectedInfoHash = await sha256(HPKE_INFO);
     if (!equalBytes(envelope.infoHash, expectedInfoHash)) {
-      throw new TypeError('Apple response HPKE info hash is invalid');
+      throw new TypeError("Apple response HPKE info hash is invalid");
     }
   }
 
@@ -146,11 +153,10 @@ export async function decryptAppleCredential(input: {
   });
   const plaintext = await recipient.open(
     Uint8Array.from(envelope.ciphertext).buffer,
-    EMPTY_AAD
+    EMPTY_AAD,
   );
   return {
     deviceResponse: new Uint8Array(plaintext),
     sessionTranscript,
   };
 }
-

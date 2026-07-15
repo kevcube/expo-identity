@@ -1,11 +1,11 @@
+import type { IdentityProtocol, ProtocolRequest } from "../shared/protocol";
 import type {
   IdentityRequestDefinition,
   IdentityRequestDefinitions,
   VerifiedIdentity,
-} from '../shared/requests';
-import type { IdentityProtocol, ProtocolRequest } from '../shared/protocol';
+} from "../shared/requests";
 
-export type IdentityPlatform = 'ios' | 'android' | 'web';
+export type IdentityPlatform = "ios" | "android" | "web";
 
 export type TrustAnchorSet = {
   issuance: string[];
@@ -13,9 +13,9 @@ export type TrustAnchorSet = {
 };
 
 export type AppleIdentityConfiguration =
-  | { mode: 'simulator' }
+  | { mode: "simulator" }
   | {
-      mode: 'production';
+      mode: "production";
       merchantIdentifier: string;
       teamIdentifier: string;
       encryptionCertificate: string;
@@ -37,7 +37,7 @@ export type ReaderAuthenticationConfiguration = {
 
 export type TrustedOriginPredicate = (
   origin: string,
-  request: Request
+  request: Request,
 ) => boolean | Promise<boolean>;
 
 export type IdentityTransaction = {
@@ -58,9 +58,7 @@ export interface IdentityTransactionStore {
   take(id: string): Promise<IdentityTransaction | null>;
 }
 
-export type VerifiedContext<
-  TRequests extends IdentityRequestDefinitions,
-> = {
+export type VerifiedContext<TRequests extends IdentityRequestDefinitions> = {
   [TKey in Extract<keyof TRequests, string>]: {
     identity: VerifiedIdentity<TKey, TRequests[TKey]>;
     request: TKey;
@@ -82,16 +80,17 @@ export type ExpoIdentityOptions<
   readerAuthentication?: ReaderAuthenticationConfiguration;
   onVerified?: (
     context: VerifiedContext<TRequests>,
-    request: Request
+    request: Request,
   ) => TCallbackOutput | Promise<TCallbackOutput>;
 };
 
-export type DefaultServerOutputs<TRequests extends IdentityRequestDefinitions> = {
-  [TKey in Extract<keyof TRequests, string>]: VerifiedIdentity<
-    TKey,
-    TRequests[TKey]
-  >;
-};
+export type DefaultServerOutputs<TRequests extends IdentityRequestDefinitions> =
+  {
+    [TKey in Extract<keyof TRequests, string>]: VerifiedIdentity<
+      TKey,
+      TRequests[TKey]
+    >;
+  };
 
 export type CallbackServerOutputs<
   TRequests extends IdentityRequestDefinitions,

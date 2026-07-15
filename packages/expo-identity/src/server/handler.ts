@@ -1,38 +1,41 @@
-import type { DeviceRequest } from '@owf/mdoc';
+import type { DeviceRequest } from "@owf/mdoc";
 
-import type { IdentityRequestDefinitions } from '../shared/requests';
 import {
   isIdentityProtocol,
   isRecord,
   parseProtocolCredential,
   type IdentityProtocol,
-} from '../shared/protocol';
-import { createAppleProtocolRequest, decryptAppleCredential } from './apple/protocol';
-import type { InitializedServerCrypto } from './crypto/initialize';
-import { randomBase64url } from './crypto/wintercg-context';
+} from "../shared/protocol";
+import type { IdentityRequestDefinitions } from "../shared/requests";
+import {
+  createAppleProtocolRequest,
+  decryptAppleCredential,
+} from "./apple/protocol";
+import type { InitializedServerCrypto } from "./crypto/initialize";
+import { randomBase64url } from "./crypto/wintercg-context";
 import {
   createIsoMdocProtocolRequest,
   decryptIsoMdocCredential,
-} from './iso-mdoc/protocol';
-import { verifyMdocDeviceResponse } from './mdoc/verify';
+} from "./iso-mdoc/protocol";
+import { verifyMdocDeviceResponse } from "./mdoc/verify";
 import {
   createOpenId4VpProtocolRequest,
   decryptOpenId4VpCredential,
-} from './openid4vp/protocol';
+} from "./openid4vp/protocol";
 import type {
   ExpoIdentityOptions,
   IdentityPlatform,
   IdentityTransaction,
-} from './types';
+} from "./types";
 
 type ServerErrorCode =
-  | 'UNAVAILABLE'
-  | 'INVALID_REQUEST'
-  | 'EXPIRED'
-  | 'INVALID_RESPONSE'
-  | 'UNTRUSTED_ISSUER'
-  | 'VERIFICATION_FAILED'
-  | 'SERVER_ERROR';
+  | "UNAVAILABLE"
+  | "INVALID_REQUEST"
+  | "EXPIRED"
+  | "INVALID_RESPONSE"
+  | "UNTRUSTED_ISSUER"
+  | "VERIFICATION_FAILED"
+  | "SERVER_ERROR";
 
 class IdentityServerError extends Error {
   readonly code: ServerErrorCode;
@@ -40,7 +43,7 @@ class IdentityServerError extends Error {
 
   constructor(code: ServerErrorCode, message: string, status: number) {
     super(message);
-    this.name = 'IdentityServerError';
+    this.name = "IdentityServerError";
     this.code = code;
     this.status = status;
   }
@@ -49,14 +52,16 @@ class IdentityServerError extends Error {
 function jsonResponse(
   data: unknown,
   init: ResponseInit = {},
-  extraHeaders?: HeadersInit
+  extraHeaders?: HeadersInit,
 ): Response {
   const body = JSON.stringify(data);
   if (body === undefined) {
-    throw new TypeError('Server callback must return a JSON-serializable value');
+    throw new TypeError(
+      "Server callback must return a JSON-serializable value",
+    );
   }
   const headers = new Headers(init.headers);
-  headers.set('content-type', 'application/json');
+  headers.set("content-type", "application/json");
   if (extraHeaders) {
     new Headers(extraHeaders).forEach((value, key) => headers.set(key, value));
   }
@@ -68,14 +73,14 @@ function errorResponse(error: unknown, headers?: HeadersInit): Response {
     error instanceof IdentityServerError
       ? error
       : new IdentityServerError(
-          'SERVER_ERROR',
-          'The identity server could not complete the request.',
-          500
+          "SERVER_ERROR",
+          "The identity server could not complete the request.",
+          500,
         );
   return jsonResponse(
     { error: { code: normalized.code, message: normalized.message } },
     { status: normalized.status },
-    headers
+    headers,
   );
 }
 
@@ -84,30 +89,30 @@ async function requestJson(request: Request): Promise<unknown> {
     return await request.json();
   } catch {
     throw new IdentityServerError(
-      'INVALID_REQUEST',
-      'The request body must be valid JSON.',
-      400
+      "INVALID_REQUEST",
+      "The request body must be valid JSON.",
+      400,
     );
   }
 }
 
 function parsePlatform(value: unknown): IdentityPlatform {
-  if (value === 'ios' || value === 'android' || value === 'web') {
+  if (value === "ios" || value === "android" || value === "web") {
     return value;
   }
   throw new IdentityServerError(
-    'INVALID_REQUEST',
-    'The identity platform is invalid.',
-    400
+    "INVALID_REQUEST",
+    "The identity platform is invalid.",
+    400,
   );
 }
 
 function parseProtocols(value: unknown): IdentityProtocol[] {
   if (!Array.isArray(value) || !value.every(isIdentityProtocol)) {
     throw new IdentityServerError(
-      'INVALID_REQUEST',
-      'The supported identity protocols are invalid.',
-      400
+      "INVALID_REQUEST",
+      "The supported identity protocols are invalid.",
+      400,
     );
   }
   return value;
@@ -116,12 +121,12 @@ function parseProtocols(value: unknown): IdentityProtocol[] {
 async function originAllowed(
   options: ExpoIdentityOptions<IdentityRequestDefinitions, unknown>,
   origin: string,
-  request: Request
+  request: Request,
 ): Promise<boolean> {
   if (Array.isArray(options.trustedOrigins)) {
     return options.trustedOrigins.includes(origin);
   }
-  if (typeof options.trustedOrigins === 'function') {
+  if (typeof options.trustedOrigins === "function") {
     return options.trustedOrigins(origin, request);
   }
   return false;
@@ -131,67 +136,67 @@ async function validatedOrigin(
   options: ExpoIdentityOptions<IdentityRequestDefinitions, unknown>,
   platform: IdentityPlatform,
   claimedOrigin: unknown,
-  request: Request
+  request: Request,
 ): Promise<string | undefined> {
-  if (platform === 'ios') {
+  if (platform === "ios") {
     if (claimedOrigin !== undefined) {
       throw new IdentityServerError(
-        'INVALID_REQUEST',
-        'iOS Apple Wallet requests do not use an origin.',
-        400
+        "INVALID_REQUEST",
+        "iOS Apple Wallet requests do not use an origin.",
+        400,
       );
     }
     return undefined;
   }
-  if (typeof claimedOrigin !== 'string' || claimedOrigin.length === 0) {
+  if (typeof claimedOrigin !== "string" || claimedOrigin.length === 0) {
     throw new IdentityServerError(
-      'INVALID_REQUEST',
-      'An origin is required for this identity platform.',
-      400
+      "INVALID_REQUEST",
+      "An origin is required for this identity platform.",
+      400,
     );
   }
   if (
-    platform === 'android' &&
-    !claimedOrigin.startsWith('android:apk-key-hash:')
+    platform === "android" &&
+    !claimedOrigin.startsWith("android:apk-key-hash:")
   ) {
     throw new IdentityServerError(
-      'INVALID_REQUEST',
-      'The Android application origin is invalid.',
-      400
+      "INVALID_REQUEST",
+      "The Android application origin is invalid.",
+      400,
     );
   }
-  if (platform === 'web') {
+  if (platform === "web") {
     let parsed: URL;
     try {
       parsed = new URL(claimedOrigin);
     } catch {
       throw new IdentityServerError(
-        'INVALID_REQUEST',
-        'The web origin is invalid.',
-        400
+        "INVALID_REQUEST",
+        "The web origin is invalid.",
+        400,
       );
     }
     if (parsed.origin !== claimedOrigin || !/^https?:$/.test(parsed.protocol)) {
       throw new IdentityServerError(
-        'INVALID_REQUEST',
-        'The web origin is invalid.',
-        400
+        "INVALID_REQUEST",
+        "The web origin is invalid.",
+        400,
       );
     }
-    const headerOrigin = request.headers.get('origin');
+    const headerOrigin = request.headers.get("origin");
     if (headerOrigin && headerOrigin !== claimedOrigin) {
       throw new IdentityServerError(
-        'INVALID_REQUEST',
-        'The request origin does not match the presented origin.',
-        400
+        "INVALID_REQUEST",
+        "The request origin does not match the presented origin.",
+        400,
       );
     }
   }
   if (!(await originAllowed(options, claimedOrigin, request))) {
     throw new IdentityServerError(
-      'INVALID_REQUEST',
-      'The identity request origin is not trusted.',
-      403
+      "INVALID_REQUEST",
+      "The identity request origin is not trusted.",
+      403,
     );
   }
   return claimedOrigin;
@@ -203,36 +208,36 @@ function chooseProtocol(input: {
   hasAppleDocument: boolean;
   crypto: InitializedServerCrypto;
 }): IdentityProtocol {
-  if (input.platform === 'ios') {
+  if (input.platform === "ios") {
     if (
       input.hasAppleDocument &&
       input.crypto.apple &&
-      input.protocols.includes('apple-wallet')
+      input.protocols.includes("apple-wallet")
     ) {
-      return 'apple-wallet';
+      return "apple-wallet";
     }
   } else {
     if (
       input.crypto.requestSigning &&
-      input.protocols.includes('openid4vp-v1-signed')
+      input.protocols.includes("openid4vp-v1-signed")
     ) {
-      return 'openid4vp-v1-signed';
+      return "openid4vp-v1-signed";
     }
-    if (input.protocols.includes('openid4vp-v1-unsigned')) {
-      return 'openid4vp-v1-unsigned';
+    if (input.protocols.includes("openid4vp-v1-unsigned")) {
+      return "openid4vp-v1-unsigned";
     }
     if (
-      input.platform === 'web' &&
+      input.platform === "web" &&
       input.crypto.readerAuthentication &&
-      input.protocols.includes('org-iso-mdoc')
+      input.protocols.includes("org-iso-mdoc")
     ) {
-      return 'org-iso-mdoc';
+      return "org-iso-mdoc";
     }
   }
   throw new IdentityServerError(
-    'UNAVAILABLE',
-    'No supported digital identity protocol is available.',
-    400
+    "UNAVAILABLE",
+    "No supported digital identity protocol is available.",
+    400,
   );
 }
 
@@ -242,19 +247,19 @@ async function prepareTransaction(input: {
   crypto: InitializedServerCrypto;
 }): Promise<Response> {
   const payload = await requestJson(input.request);
-  if (!isRecord(payload) || typeof payload.request !== 'string') {
+  if (!isRecord(payload) || typeof payload.request !== "string") {
     throw new IdentityServerError(
-      'INVALID_REQUEST',
-      'The configured identity request key is required.',
-      400
+      "INVALID_REQUEST",
+      "The configured identity request key is required.",
+      400,
     );
   }
   const configuredRequest = input.options.requests[payload.request];
   if (!configuredRequest) {
     throw new IdentityServerError(
-      'INVALID_REQUEST',
-      'The identity request is not configured.',
-      400
+      "INVALID_REQUEST",
+      "The identity request is not configured.",
+      400,
     );
   }
   const platform = parsePlatform(payload.platform);
@@ -263,7 +268,7 @@ async function prepareTransaction(input: {
     input.options,
     platform,
     payload.origin,
-    input.request
+    input.request,
   );
   const protocol = chooseProtocol({
     platform,
@@ -273,32 +278,33 @@ async function prepareTransaction(input: {
   });
   const id = randomBase64url();
   const nonce = randomBase64url();
-  const expiresAt = Date.now() + (input.options.transactionTTLSeconds ?? 300) * 1000;
+  const expiresAt =
+    Date.now() + (input.options.transactionTTLSeconds ?? 300) * 1000;
   let protocolRequest;
   let privateData: Record<string, unknown> = {};
 
-  if (protocol === 'apple-wallet') {
+  if (protocol === "apple-wallet") {
     if (!input.crypto.apple) {
       throw new IdentityServerError(
-        'UNAVAILABLE',
-        'Apple Wallet identity presentation is not configured.',
-        400
+        "UNAVAILABLE",
+        "Apple Wallet identity presentation is not configured.",
+        400,
       );
     }
     protocolRequest = createAppleProtocolRequest(
       configuredRequest,
       nonce,
-      input.crypto.apple
+      input.crypto.apple,
     );
   } else if (
-    protocol === 'openid4vp-v1-signed' ||
-    protocol === 'openid4vp-v1-unsigned'
+    protocol === "openid4vp-v1-signed" ||
+    protocol === "openid4vp-v1-unsigned"
   ) {
     if (!origin) {
       throw new IdentityServerError(
-        'INVALID_REQUEST',
-        'OpenID4VP requires an origin.',
-        400
+        "INVALID_REQUEST",
+        "OpenID4VP requires an origin.",
+        400,
       );
     }
     const prepared = await createOpenId4VpProtocolRequest({
@@ -314,9 +320,9 @@ async function prepareTransaction(input: {
   } else {
     if (!origin) {
       throw new IdentityServerError(
-        'INVALID_REQUEST',
-        'org-iso-mdoc requires an origin.',
-        400
+        "INVALID_REQUEST",
+        "org-iso-mdoc requires an origin.",
+        400,
       );
     }
     const prepared = await createIsoMdocProtocolRequest({
@@ -351,14 +357,14 @@ async function prepareTransaction(input: {
 
 function requiredCredentialString(
   data: Record<string, unknown>,
-  field: string
+  field: string,
 ): string {
   const value = data[field];
-  if (typeof value !== 'string' || value.length === 0) {
+  if (typeof value !== "string" || value.length === 0) {
     throw new IdentityServerError(
-      'INVALID_RESPONSE',
-      'The digital identity response is malformed.',
-      400
+      "INVALID_RESPONSE",
+      "The digital identity response is malformed.",
+      400,
     );
   }
   return value;
@@ -372,26 +378,32 @@ async function completeTransaction(input: {
   const payload = await requestJson(input.request);
   if (
     !isRecord(payload) ||
-    typeof payload.transactionId !== 'string' ||
+    typeof payload.transactionId !== "string" ||
     payload.transactionId.length === 0
   ) {
     throw new IdentityServerError(
-      'INVALID_REQUEST',
-      'The identity transaction ID is required.',
-      400
+      "INVALID_REQUEST",
+      "The identity transaction ID is required.",
+      400,
     );
   }
 
-  const transaction = await input.options.transactionStore.take(payload.transactionId);
+  const transaction = await input.options.transactionStore.take(
+    payload.transactionId,
+  );
   if (!transaction) {
     throw new IdentityServerError(
-      'EXPIRED',
-      'The identity request is expired or has already been used.',
-      410
+      "EXPIRED",
+      "The identity request is expired or has already been used.",
+      410,
     );
   }
   if (transaction.expiresAt <= Date.now()) {
-    throw new IdentityServerError('EXPIRED', 'The identity request has expired.', 410);
+    throw new IdentityServerError(
+      "EXPIRED",
+      "The identity request has expired.",
+      410,
+    );
   }
 
   let credential;
@@ -399,25 +411,25 @@ async function completeTransaction(input: {
     credential = parseProtocolCredential(payload.credential);
   } catch {
     throw new IdentityServerError(
-      'INVALID_RESPONSE',
-      'The digital identity response is malformed.',
-      400
+      "INVALID_RESPONSE",
+      "The digital identity response is malformed.",
+      400,
     );
   }
   if (credential.protocol !== transaction.protocol) {
     throw new IdentityServerError(
-      'INVALID_RESPONSE',
-      'The digital identity protocol does not match the request.',
-      400
+      "INVALID_RESPONSE",
+      "The digital identity protocol does not match the request.",
+      400,
     );
   }
-  if (transaction.platform === 'web') {
-    const headerOrigin = input.request.headers.get('origin');
+  if (transaction.platform === "web") {
+    const headerOrigin = input.request.headers.get("origin");
     if (headerOrigin && headerOrigin !== transaction.expectedOrigin) {
       throw new IdentityServerError(
-        'INVALID_RESPONSE',
-        'The completion origin does not match the request.',
-        400
+        "INVALID_RESPONSE",
+        "The completion origin does not match the request.",
+        400,
       );
     }
   }
@@ -428,34 +440,37 @@ async function completeTransaction(input: {
       sessionTranscript: Uint8Array;
     };
     let deviceRequest: DeviceRequest | undefined;
-    if (transaction.protocol === 'apple-wallet') {
+    if (transaction.protocol === "apple-wallet") {
       if (!input.crypto.apple) {
-        throw new TypeError('Apple verification credentials are unavailable');
+        throw new TypeError("Apple verification credentials are unavailable");
       }
       decrypted = await decryptAppleCredential({
-        encryptedData: requiredCredentialString(credential.data, 'encryptedData'),
+        encryptedData: requiredCredentialString(
+          credential.data,
+          "encryptedData",
+        ),
         nonce: transaction.nonce,
         credential: input.crypto.apple,
       });
     } else if (
-      transaction.protocol === 'openid4vp-v1-signed' ||
-      transaction.protocol === 'openid4vp-v1-unsigned'
+      transaction.protocol === "openid4vp-v1-signed" ||
+      transaction.protocol === "openid4vp-v1-unsigned"
     ) {
       if (!transaction.expectedOrigin) {
-        throw new TypeError('OpenID transaction origin is missing');
+        throw new TypeError("OpenID transaction origin is missing");
       }
       decrypted = await decryptOpenId4VpCredential({
-        response: requiredCredentialString(credential.data, 'response'),
+        response: requiredCredentialString(credential.data, "response"),
         nonce: transaction.nonce,
         origin: transaction.expectedOrigin,
         privateData: transaction.privateData,
       });
     } else {
       if (!transaction.expectedOrigin) {
-        throw new TypeError('org-iso-mdoc transaction origin is missing');
+        throw new TypeError("org-iso-mdoc transaction origin is missing");
       }
       const isoMdoc = await decryptIsoMdocCredential({
-        response: requiredCredentialString(credential.data, 'response'),
+        response: requiredCredentialString(credential.data, "response"),
         origin: transaction.expectedOrigin,
         privateData: transaction.privateData,
       });
@@ -471,10 +486,10 @@ async function completeTransaction(input: {
       crypto: input.crypto,
       protocol: transaction.protocol,
       assurance:
-        transaction.protocol === 'apple-wallet' &&
-        input.crypto.apple?.mode === 'simulator'
-          ? 'simulator'
-          : 'verified',
+        transaction.protocol === "apple-wallet" &&
+        input.crypto.apple?.mode === "simulator"
+          ? "simulator"
+          : "verified",
       deviceRequest,
     });
 
@@ -485,13 +500,13 @@ async function completeTransaction(input: {
     try {
       callbackResult = await input.options.onVerified(
         { identity, request: transaction.requestKey },
-        input.request
+        input.request,
       );
     } catch {
       throw new IdentityServerError(
-        'SERVER_ERROR',
-        'The identity server callback failed.',
-        500
+        "SERVER_ERROR",
+        "The identity server callback failed.",
+        500,
       );
     }
     return jsonResponse(callbackResult);
@@ -500,19 +515,19 @@ async function completeTransaction(input: {
       throw error;
     }
     throw new IdentityServerError(
-      'VERIFICATION_FAILED',
-      'The digital identity response could not be verified.',
-      400
+      "VERIFICATION_FAILED",
+      "The digital identity response could not be verified.",
+      400,
     );
   }
 }
 
 function corsHeaders(origin: string): HeadersInit {
   return {
-    'access-control-allow-origin': origin,
-    'access-control-allow-methods': 'POST, OPTIONS',
-    'access-control-allow-headers': 'content-type',
-    vary: 'Origin',
+    "access-control-allow-origin": origin,
+    "access-control-allow-methods": "POST, OPTIONS",
+    "access-control-allow-headers": "content-type",
+    vary: "Origin",
   };
 }
 
@@ -528,19 +543,19 @@ export function createIdentityHandler(input: {
     if (!isPrepare && !isComplete) {
       return new Response(null, { status: 404 });
     }
-    if (request.method !== 'POST' && request.method !== 'OPTIONS') {
+    if (request.method !== "POST" && request.method !== "OPTIONS") {
       return new Response(null, {
         status: 405,
-        headers: { allow: 'POST, OPTIONS' },
+        headers: { allow: "POST, OPTIONS" },
       });
     }
 
-    const origin = request.headers.get('origin');
+    const origin = request.headers.get("origin");
     let headers: HeadersInit | undefined;
     if (origin && (await originAllowed(input.options, origin, request))) {
       headers = corsHeaders(origin);
     }
-    if (request.method === 'OPTIONS') {
+    if (request.method === "OPTIONS") {
       if (origin && !headers) {
         return new Response(null, { status: 403 });
       }
@@ -562,7 +577,7 @@ export function createIdentityHandler(input: {
           });
       if (headers) {
         new Headers(headers).forEach((value, key) =>
-          response.headers.set(key, value)
+          response.headers.set(key, value),
         );
       }
       return response;

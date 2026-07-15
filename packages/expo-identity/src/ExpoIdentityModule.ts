@@ -1,15 +1,10 @@
 import { NativeModule, requireNativeModule } from "expo";
 
-import type {
-  ExpoIdentityModuleEvents,
-  IdentityDocumentRequest,
-  IdentityDocument,
-} from "./ExpoIdentity.types";
+import type { IdentityCapabilities } from "./shared/protocol";
 
-declare class ExpoIdentityNativeModule extends NativeModule<ExpoIdentityModuleEvents> {
-  canRequestIdentityDocument(documentKind: IdentityDocument): Promise<boolean>;
-  requestIdentityDocument(documentRequest: IdentityDocumentRequest): Promise<boolean>;
+declare class ExpoIdentityNativeModule extends NativeModule {
+  getCapabilities(): Promise<IdentityCapabilities>;
+  present(requestJson: string): Promise<string>;
 }
 
-// This call loads the native module object from the JSI.
 export default requireNativeModule<ExpoIdentityNativeModule>("ExpoIdentity");

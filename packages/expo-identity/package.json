@@ -1,16 +1,21 @@
 {
   "name": "expo-identity",
-  "version": "0.1.0",
-  "description": "Module for interacting with identity documents on iOS",
-  "main": "build/index.js",
+  "version": "0.2.0",
+  "description": "Typed ISO mdoc presentation for Expo clients and WinterCG servers",
+  "main": "build/esm/index.mjs",
+  "module": "build/esm/index.mjs",
+  "react-native": "build/index.js",
   "types": "build/index.d.ts",
   "scripts": {
-    "build": "expo-module build",
+    "build": "expo-module build && npm run build:esm",
+    "build:esm": "npm run build:esm:client && npm run build:esm:server",
+    "build:esm:client": "esbuild src/index.ts src/client/index.ts src/client/ios.ts src/client/android.ts src/client/web.ts --bundle --splitting --packages=external --platform=neutral --format=esm --chunk-names=chunks/[name]-[hash] --outdir=build/esm --out-extension:.js=.mjs",
+    "build:esm:server": "esbuild src/server/index.ts --bundle --platform=browser --format=esm --outfile=build/esm/server/index.mjs",
     "clean": "expo-module clean",
     "lint": "expo-module lint",
     "test": "tsx --test src/__tests__/*.test.ts",
     "prepare": "expo-module prepare",
-    "prepublishOnly": "expo-module prepublishOnly",
+    "prepublishOnly": "npm run clean && npm run build",
     "expo-module": "expo-module",
     "open:ios": "xed example/ios",
     "open:android": "open -a \"Android Studio\" example/android"
@@ -31,18 +36,49 @@
   "exports": {
     ".": {
       "types": "./build/index.d.ts",
-      "default": "./build/index.js"
+      "react-native": "./build/index.js",
+      "browser": "./build/index.js",
+      "import": "./build/esm/index.mjs",
+      "default": "./build/esm/index.mjs"
+    },
+    "./client": {
+      "types": "./build/client/index.d.ts",
+      "react-native": "./build/client/index.js",
+      "browser": "./build/client/index.js",
+      "import": "./build/esm/client/index.mjs",
+      "default": "./build/esm/client/index.mjs"
+    },
+    "./client/ios": {
+      "types": "./build/client/ios.d.ts",
+      "react-native": "./build/client/ios.js",
+      "import": "./build/esm/client/ios.mjs",
+      "default": "./build/esm/client/ios.mjs"
+    },
+    "./client/android": {
+      "types": "./build/client/android.d.ts",
+      "react-native": "./build/client/android.js",
+      "import": "./build/esm/client/android.mjs",
+      "default": "./build/esm/client/android.mjs"
+    },
+    "./client/web": {
+      "types": "./build/client/web.d.ts",
+      "browser": "./build/client/web.js",
+      "import": "./build/esm/client/web.mjs",
+      "default": "./build/esm/client/web.mjs"
     },
     "./server": {
       "types": "./build/server/index.d.ts",
-      "default": "./build/server/index.js"
-    }
+      "import": "./build/esm/server/index.mjs",
+      "default": "./build/esm/server/index.mjs"
+    },
+    "./package.json": "./package.json"
   },
   "devDependencies": {
     "@types/react": "~19.2.0",
+    "esbuild": "~0.28.0",
     "expo": "~56.0.15",
     "expo-module-scripts": "^56.0.3",
-    "react-native": "0.85.0",
+    "react-native": "0.85.3",
     "tsx": "^4.23.1"
   },
   "peerDependencies": {
@@ -51,15 +87,14 @@
     "react-native": "*"
   },
   "dependencies": {
+    "@expo/config-plugins": "^56.0.12",
     "@hpke/core": "^1.9.0",
     "@noble/curves": "^2.2.0",
     "@noble/hashes": "^2.2.0",
     "@owf/cose": "^0.3.2",
     "@owf/mdoc": "^0.7.0",
     "@peculiar/x509": "^2.0.0",
-    "cbor2": "^2.3.0",
     "jose": "^6.2.3",
-    "reflect-metadata": "^0.2.2",
-    "verify-id-with-wallet": "file:../verify-id-with-wallet"
+    "reflect-metadata": "^0.2.2"
   }
 }

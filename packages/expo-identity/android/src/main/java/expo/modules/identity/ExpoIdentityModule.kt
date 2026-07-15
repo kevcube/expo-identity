@@ -1,50 +1,132 @@
 package expo.modules.identity
 
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import android.util.Base64
+import androidx.credentials.CredentialManager
+import androidx.credentials.DigitalCredential
+import androidx.credentials.ExperimentalDigitalCredentialApi
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.GetDigitalCredentialOption
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialInterruptedException
+import androidx.credentials.exceptions.GetCredentialProviderConfigurationException
+import androidx.credentials.exceptions.GetCredentialUnsupportedException
+import androidx.credentials.exceptions.NoCredentialException
+import androidx.credentials.provider.SigningInfoCompat
+import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
-import java.net.URL
+import java.security.MessageDigest
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 
+@OptIn(ExperimentalDigitalCredentialApi::class)
 class ExpoIdentityModule : Module() {
-  // Each module class must implement the definition function. The definition consists of components
-  // that describes the module's functionality and behavior.
-  // See https://docs.expo.dev/modules/module-api for more details about available components.
+  @Volatile
+  private var requestActive = false
+
   override fun definition() = ModuleDefinition {
-    // Sets the name of the module that JavaScript code will use to refer to the module. Takes a string as an argument.
-    // Can be inferred from module's class name, but it's recommended to set it explicitly for clarity.
-    // The module will be accessible from `requireNativeModule('ExpoIdentity')` in JavaScript.
     Name("ExpoIdentity")
 
-    // Sets constant properties on the module. Can take a dictionary or a closure that returns a dictionary.
-    Constants(
-      "PI" to Math.PI
-    )
-
-    // Defines event names that the module can send to JavaScript.
-    Events("onChange")
-
-    // Defines a JavaScript synchronous function that runs the native code on the JavaScript thread.
-    Function("hello") {
-      "Hello world! 👋"
-    }
-
-    // Defines a JavaScript function that always returns a Promise and whose native code
-    // is by default dispatched on the different thread than the JavaScript runtime runs on.
-    AsyncFunction("setValueAsync") { value: String ->
-      // Send an event to JavaScript.
-      sendEvent("onChange", mapOf(
-        "value" to value
-      ))
-    }
-
-    // Enables the module to be used as a native view. Definition components that are accepted as part of
-    // the view definition: Prop, Events.
-    View(ExpoIdentityView::class) {
-      // Defines a setter for the `url` prop.
-      Prop("url") { view: ExpoIdentityView, url: URL ->
-        view.webView.loadUrl(url.toString())
+    AsyncFunction("getCapabilities") { promise: Promise ->
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+        promise.reject("UNAVAILABLE", "Digital Credentials require Android 9 or later.", null)
+        return@AsyncFunction
       }
-      // Defines an event that the view can send to JavaScript.
-      Events("onLoad")
+      try {
+        promise.resolve(
+          mapOf(
+            "protocols" to listOf("openid4vp-v1-signed", "openid4vp-v1-unsigned"),
+            "origin" to appOrigin(appContext.reactContext!!)
+          )
+        )
+      } catch (error: Exception) {
+        promise.reject("UNAVAILABLE", "Could not determine the app signing origin.", error)
+      }
+    }
+
+    AsyncFunction("present") { requestJson: String, promise: Promise ->
+      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+        promise.reject("UNAVAILABLE", "Digital Credentials require Android 9 or later.", null)
+        return@AsyncFunction
+      }
+      val activity = appContext.currentActivity
+      if (activity == null) {
+        promise.reject("UNAVAILABLE", "An Android activity is required to present a credential.", null)
+        return@AsyncFunction
+      }
+      synchronized(this@ExpoIdentityModule) {
+        if (requestActive) {
+          promise.reject("REQUEST_IN_PROGRESS", "An identity request is already in progress.", null)
+          return@AsyncFunction
+        }
+        requestActive = true
+      }
+
+      CoroutineScope(Dispatchers.Main).launch {
+        try {
+          val protocolRequest = JSONObject(requestJson)
+          val protocol = protocolRequest.getString("protocol")
+          if (protocol != "openid4vp-v1-signed" && protocol != "openid4vp-v1-unsigned") {
+            throw IllegalArgumentException("Unsupported Android identity protocol")
+          }
+          protocolRequest.getJSONObject("data")
+          val credentialManagerRequest = JSONObject()
+            .put("requests", JSONArray().put(protocolRequest))
+            .toString()
+          val response = CredentialManager.create(activity).getCredential(
+            activity,
+            GetCredentialRequest(
+              listOf(GetDigitalCredentialOption(credentialManagerRequest))
+            )
+          )
+          val credential = response.credential
+          if (credential !is DigitalCredential) {
+            promise.reject("INVALID_RESPONSE", "The wallet did not return a digital credential.", null)
+            return@launch
+          }
+          promise.resolve(credential.credentialJson)
+        } catch (error: Exception) {
+          reject(promise, error)
+        } finally {
+          requestActive = false
+        }
+      }
+    }
+  }
+
+  private fun appOrigin(context: Context): String {
+    val packageInfo = context.packageManager.getPackageInfo(
+      context.packageName,
+      PackageManager.GET_SIGNING_CERTIFICATES
+    )
+    val signingInfo = SigningInfoCompat.fromSigningInfo(requireNotNull(packageInfo.signingInfo))
+    val certificate = signingInfo.signingCertificateHistory.first().toByteArray()
+    val digest = MessageDigest.getInstance("SHA-256").digest(certificate)
+    val encoded = Base64.encodeToString(digest, Base64.NO_WRAP or Base64.NO_PADDING)
+    return "android:apk-key-hash:$encoded"
+  }
+
+  private fun reject(promise: Promise, error: Exception) {
+    when (error) {
+      is GetCredentialCancellationException ->
+        promise.reject("CANCELLED", "Identity presentation was cancelled.", error)
+      is NoCredentialException ->
+        promise.reject("UNAVAILABLE", "No eligible identity document is available.", error)
+      is GetCredentialInterruptedException ->
+        promise.reject("CANCELLED", "Identity presentation was interrupted.", error)
+      is GetCredentialProviderConfigurationException,
+      is GetCredentialUnsupportedException ->
+        promise.reject("UNAVAILABLE", "No digital credential provider is available.", error)
+      is IllegalArgumentException ->
+        promise.reject("INVALID_REQUEST", error.message ?: "The identity request is invalid.", error)
+      else ->
+        promise.reject("UNAVAILABLE", "The wallet could not present a digital credential.", error)
     }
   }
 }

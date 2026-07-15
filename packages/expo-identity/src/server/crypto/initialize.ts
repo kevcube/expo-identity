@@ -1,18 +1,10 @@
-import 'reflect-metadata';
+import "reflect-metadata";
 
 import {
   BasicConstraintsExtension,
   type X509Certificate,
-} from '@peculiar/x509';
+} from "@peculiar/x509";
 
-import {
-  APPLE_SIMULATOR_ENCRYPTION_CERTIFICATE,
-  APPLE_SIMULATOR_ENCRYPTION_PRIVATE_KEY,
-  APPLE_SIMULATOR_MERCHANT_IDENTIFIER,
-  APPLE_SIMULATOR_TEAM_IDENTIFIER,
-} from '../apple/simulator-material';
-import type { IdentityRequestDefinitions } from '../../shared/requests';
-import type { ExpoIdentityOptions } from '../types';
 import {
   assertPrivateKeyMatchesCertificate,
   bytesToBase64url,
@@ -20,7 +12,15 @@ import {
   importP256EcdhPrivateKey,
   parseCertificate,
   sha256,
-} from './wintercg-context';
+} from "./wintercg-context";
+import type { IdentityRequestDefinitions } from "../../shared/requests";
+import {
+  APPLE_SIMULATOR_ENCRYPTION_CERTIFICATE,
+  APPLE_SIMULATOR_ENCRYPTION_PRIVATE_KEY,
+  APPLE_SIMULATOR_MERCHANT_IDENTIFIER,
+  APPLE_SIMULATOR_TEAM_IDENTIFIER,
+} from "../apple/simulator-material";
+import type { ExpoIdentityOptions } from "../types";
 
 export type InitializedCredential = {
   certificates: X509Certificate[];
@@ -28,7 +28,7 @@ export type InitializedCredential = {
 };
 
 export type InitializedAppleCredential = InitializedCredential & {
-  mode: 'production' | 'simulator';
+  mode: "production" | "simulator";
   merchantIdentifier: string;
   teamIdentifier: string;
   encryptionKeyHash: string;
@@ -42,21 +42,27 @@ export type InitializedServerCrypto = {
   trustAnchors: { issuance: X509Certificate[]; status: X509Certificate[] }[];
 };
 
-function parseCertificateChain(pems: string[], path: string): X509Certificate[] {
+function parseCertificateChain(
+  pems: string[],
+  path: string,
+): X509Certificate[] {
   return pems.map((pem, index) => {
     try {
       return parseCertificate(pem);
     } catch (error) {
-      throw new TypeError(`${path}[${index}] is not a valid X.509 certificate`, {
-        cause: error,
-      });
+      throw new TypeError(
+        `${path}[${index}] is not a valid X.509 certificate`,
+        {
+          cause: error,
+        },
+      );
     }
   });
 }
 
 async function assertCertificateChain(
   certificates: X509Certificate[],
-  path: string
+  path: string,
 ): Promise<void> {
   const now = new Date();
   for (const [index, certificate] of certificates.entries()) {
@@ -65,7 +71,9 @@ async function assertCertificateChain(
     }
     const issuer = certificates[index + 1];
     if (issuer && !(await certificate.verify({ publicKey: issuer }, crypto))) {
-      throw new TypeError(`${path}[${index}] is not signed by the next certificate`);
+      throw new TypeError(
+        `${path}[${index}] is not signed by the next certificate`,
+      );
     }
   }
 }
@@ -80,9 +88,12 @@ function assertTrustAnchor(certificate: X509Certificate, path: string): void {
 async function initializeCredential(
   certificatePems: string[],
   privateKeyPem: string,
-  path: string
+  path: string,
 ): Promise<InitializedCredential> {
-  const certificates = parseCertificateChain(certificatePems, `${path}.certificateChain`);
+  const certificates = parseCertificateChain(
+    certificatePems,
+    `${path}.certificateChain`,
+  );
   await assertCertificateChain(certificates, `${path}.certificateChain`);
   const leaf = certificates[0];
   if (!leaf) {
@@ -91,91 +102,93 @@ async function initializeCredential(
   const privateKey = await assertPrivateKeyMatchesCertificate(
     privateKeyPem,
     leaf,
-    `${path}.privateKey`
+    `${path}.privateKey`,
   );
   return { certificates, privateKey };
 }
 
 export async function initializeServerCrypto(
-  options: ExpoIdentityOptions<IdentityRequestDefinitions, unknown>
+  options: ExpoIdentityOptions<IdentityRequestDefinitions, unknown>,
 ): Promise<InitializedServerCrypto> {
-  const trustAnchors = (options.trustAnchors ?? []).map((anchorSet, setIndex) => {
-    const issuance = parseCertificateChain(
-      anchorSet.issuance,
-      `trustAnchors[${setIndex}].issuance`
-    );
-    const status = parseCertificateChain(
-      anchorSet.status,
-      `trustAnchors[${setIndex}].status`
-    );
-    issuance.forEach((certificate, certificateIndex) =>
-      assertTrustAnchor(
-        certificate,
-        `trustAnchors[${setIndex}].issuance[${certificateIndex}]`
-      )
-    );
-    status.forEach((certificate, certificateIndex) =>
-      assertTrustAnchor(
-        certificate,
-        `trustAnchors[${setIndex}].status[${certificateIndex}]`
-      )
-    );
-    return { issuance, status };
-  });
+  const trustAnchors = (options.trustAnchors ?? []).map(
+    (anchorSet, setIndex) => {
+      const issuance = parseCertificateChain(
+        anchorSet.issuance,
+        `trustAnchors[${setIndex}].issuance`,
+      );
+      const status = parseCertificateChain(
+        anchorSet.status,
+        `trustAnchors[${setIndex}].status`,
+      );
+      issuance.forEach((certificate, certificateIndex) =>
+        assertTrustAnchor(
+          certificate,
+          `trustAnchors[${setIndex}].issuance[${certificateIndex}]`,
+        ),
+      );
+      status.forEach((certificate, certificateIndex) =>
+        assertTrustAnchor(
+          certificate,
+          `trustAnchors[${setIndex}].status[${certificateIndex}]`,
+        ),
+      );
+      return { issuance, status };
+    },
+  );
 
   let apple: InitializedAppleCredential | undefined;
   if (options.apple) {
     const mode = options.apple.mode;
     const certificatePem =
-      mode === 'simulator'
+      mode === "simulator"
         ? APPLE_SIMULATOR_ENCRYPTION_CERTIFICATE
         : options.apple.encryptionCertificate;
     const privateKeyPem =
-      mode === 'simulator'
+      mode === "simulator"
         ? APPLE_SIMULATOR_ENCRYPTION_PRIVATE_KEY
         : options.apple.encryptionPrivateKey;
     const credential = await initializeCredential(
       [certificatePem],
       privateKeyPem,
-      'apple'
+      "apple",
     );
     const leaf = credential.certificates[0];
     if (!leaf) {
-      throw new TypeError('apple encryption certificate is missing');
+      throw new TypeError("apple encryption certificate is missing");
     }
     apple = {
       ...credential,
       mode,
       merchantIdentifier:
-        mode === 'simulator'
+        mode === "simulator"
           ? APPLE_SIMULATOR_MERCHANT_IDENTIFIER
           : options.apple.merchantIdentifier,
       teamIdentifier:
-        mode === 'simulator'
+        mode === "simulator"
           ? APPLE_SIMULATOR_TEAM_IDENTIFIER
           : options.apple.teamIdentifier,
       decryptionKey: await importP256EcdhPrivateKey(privateKeyPem),
       encryptionKeyHash: bytesToBase64url(
-        await sha256(await certificatePublicKeyBytes(leaf))
+        await sha256(await certificatePublicKeyBytes(leaf)),
       ),
     };
   }
 
-  let requestSigning: InitializedServerCrypto['requestSigning'];
+  let requestSigning: InitializedServerCrypto["requestSigning"];
   if (options.openid4vp?.requestSigning) {
     const credential = await initializeCredential(
       options.openid4vp.requestSigning.certificateChain,
       options.openid4vp.requestSigning.privateKey,
-      'openid4vp.requestSigning'
+      "openid4vp.requestSigning",
     );
     const leaf = credential.certificates[0];
     if (!leaf) {
-      throw new TypeError('openid4vp.requestSigning certificate is missing');
+      throw new TypeError("openid4vp.requestSigning certificate is missing");
     }
     requestSigning = {
       ...credential,
       clientId: `x509_hash:${bytesToBase64url(
-        await sha256(new Uint8Array(leaf.rawData))
+        await sha256(new Uint8Array(leaf.rawData)),
       )}`,
     };
   }
@@ -185,7 +198,7 @@ export async function initializeServerCrypto(
     readerAuthentication = await initializeCredential(
       options.readerAuthentication.certificateChain,
       options.readerAuthentication.privateKey,
-      'readerAuthentication'
+      "readerAuthentication",
     );
   }
 
