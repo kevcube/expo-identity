@@ -9,24 +9,29 @@
     "web": "expo start --web"
   },
   "dependencies": {
-    "expo": "~56.0.15",
-    "expo-build-properties": "~56.0.22",
-    "expo-dev-client": "~56.0.22",
+    "expo": "~57.0.6",
+    "expo-build-properties": "~57.0.5",
+    "expo-dev-client": "~57.0.6",
+    "expo-splash-screen": "~57.0.4",
+    "expo-system-ui": "~57.0.1",
     "expo-identity": "file:../packages/expo-identity",
-    "expo-router": "~56.2.14",
+    "expo-router": "~57.0.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "react-native": "0.85.3",
+    "react-native": "0.86.0",
     "react-native-safe-area-context": "~5.7.0",
-    "react-native-web": "^0.21.2"
+    "react-native-web": "~0.21.0"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
-    "@types/react": "~19.2.0",
-    "typescript": "~6.0.3"
+    "@types/react": "~19.2.2",
+    "typescript": "7.0.2"
   },
   "private": true,
   "expo": {
+    "install": {
+      "exclude": ["typescript"]
+    },
     "autolinking": {
       "nativeModulesDir": "../packages/expo-identity"
     }

@@ -1,10 +1,10 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "strict": true,
-    "paths": {
-      "expo-identity": ["../packages/src/index"],
-      "expo-identity/*": ["../packages/src/*"]
-    }
-  }
+    "strict": true
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx"
+  ]
 }
